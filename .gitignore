@@ -1,0 +1,6 @@
+node_modules/
+.firebase/
+.vscode/
+dist/
+*.log
+.DS_Store
