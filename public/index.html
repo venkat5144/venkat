@@ -51,6 +51,15 @@
             </div>
 
             <div class="user-actions">
+                <button class="theme-switch" id="theme-toggle" title="Toggle Dark Mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <select id="lang-switch" class="filter-select"
+                    style="padding: 5px 10px; font-size: 0.8rem; border-radius: 20px;">
+                    <option value="en">English</option>
+                    <option value="te">Telugu</option>
+                    <option value="hi">Hindi</option>
+                </select>
                 <div class="user-profile hidden" id="user-info">
                     <div class="patient-nav hidden" id="patient-secondary-nav">
                         <a href="javascript:void(0)" onclick="showPatientSection('home')">Home</a>
@@ -446,6 +455,14 @@
                                 class="fas fa-money-bill-transfer"></i> Payouts</button>
                         <button class="menu-item" onclick="showAdminTab('users', event)"><i class="fas fa-users"></i>
                             Users</button>
+                        <button class="menu-item" onclick="showAdminTab('reports', event)"><i
+                                class="fas fa-file-invoice-dollar"></i>
+                            Analytics</button>
+                        <button class="menu-item" onclick="showAdminTab('complaints', event)"><i
+                                class="fas fa-headset"></i>
+                            Complaints</button>
+                        <button class="menu-item" onclick="showAdminTab('settings', event)"><i class="fas fa-cog"></i>
+                            Settings</button>
                     </nav>
                 </aside>
                 <main class="doctor-main-content">
@@ -460,14 +477,56 @@
                         <div class="tile-list" id="admin-verification-list"></div>
                     </div>
                     <div id="admin-financials-tab" class="doctor-tab hidden">
-                        <h2>Payout Management</h2>
+                        <div class="tab-header"
+                            style="display:flex; justify-content:space-between; align-items:center;">
+                            <h2>Payout Management</h2>
+                            <button class="btn-signup btn-small" onclick="bulkSettlePayouts()">Bulk Settle All</button>
+                        </div>
                         <div class="tile-list" id="admin-payout-list"></div>
                     </div>
                     <div id="admin-users-tab" class="doctor-tab hidden">
                         <h2>User Management</h2>
                         <div class="tile-list" id="admin-users-list"></div>
                     </div>
+                    <div id="admin-reports-tab" class="doctor-tab hidden">
+                        <h2>Advanced Analytics</h2>
+                        <div id="admin-revenue-chart"
+                            style="height:300px; background:#f9f9f9; border-radius:15px; display:flex; align-items:center; justify-content:center; border:1px dashed #ddd; margin-bottom:30px;">
+                            <p style="color:var(--text-muted);">[Interactive Revenue Graph]</p>
+                        </div>
+                        <div class="grid-container" style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
+                                <h4>Top Performers</h4>
+                                <div id="admin-top-performers" style="width:100%; margin-top:10px;"></div>
+                            </div>
+                            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
+                                <h4>Service Breakdown</h4>
+                                <div id="admin-service-stats" style="width:100%; margin-top:10px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="admin-complaints-tab" class="doctor-tab hidden">
+                        <h2>User Support & Complaints</h2>
+                        <div class="tile-list" id="admin-complaints-list">
+                            <p style="text-align: center; padding: 40px; color: var(--text-muted);">No active
+                                complaints.</p>
+                        </div>
+                    </div>
+                    <div id="admin-settings-tab" class="doctor-tab hidden">
+                        <h2>Platform Settings</h2>
+                        <div class="profile-form">
+                            <div class="input-group"><label>Platform Commission (%)</label><input type="number"
+                                    id="set-commission" value="20"></div>
+                            <div class="input-group"><label>SLA Response Time (Mins)</label><input type="number"
+                                    id="set-sla" value="30"></div>
+                            <div class="input-group"><label>Enable Video Consultations</label><input type="checkbox"
+                                    id="set-video" checked></div>
+                            <button class="btn-signup" style="width:100%;" onclick="saveAdminSettings()">Save
+                                Configurations</button>
+                        </div>
+                    </div>
                 </main>
+
             </div>
         </section>
     </main>
@@ -539,8 +598,31 @@
         </div>
     </div>
 
+    <!-- AI Chatbot Widget -->
+    <div id="ai-bot-toggle" class="ai-bot-toggle">
+        <i class="fas fa-robot"></i>
+    </div>
+    <div id="ai-chat-window" class="ai-chat-window hidden">
+        <div class="chat-header">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <i class="fas fa-robot"></i>
+                <span style="font-weight:700;">HealthMate AI</span>
+            </div>
+            <i class="fas fa-times" id="close-chat" style="cursor:pointer;"></i>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="msg ai">Hi! I'm your HealthMate assistant. How can I help you today? You can ask me to find a
+                doctor, book an appointment, or explain a test.</div>
+        </div>
+        <div class="chat-input">
+            <input type="text" id="chat-user-input" placeholder="Type a message...">
+            <button class="btn-book" id="send-chat" style="padding: 8px 15px;"><i
+                    class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+
     <div id="toast-container" class="toast-container"></div>
-    <script src="script.js?v=2.0.3"></script>
+    <script src="script.js?v=2.0.6"></script>
 </body>
 
 </html>

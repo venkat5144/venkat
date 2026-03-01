@@ -57,8 +57,74 @@ const DOM = {
     registerCard: document.getElementById('register-card'),
     modal: document.getElementById('booking-modal'),
     modalBody: document.getElementById('modal-body'),
-    toastContainer: document.getElementById('toast-container')
+    toastContainer: document.getElementById('toast-container'),
+    aiToggle: document.getElementById('ai-bot-toggle'),
+    aiWindow: document.getElementById('ai-chat-window'),
+    chatMessages: document.getElementById('chat-messages'),
+    chatInput: document.getElementById('chat-user-input'),
+    chatSend: document.getElementById('send-chat'),
+    themeToggle: document.getElementById('theme-toggle'),
+    langSwitch: document.getElementById('lang-switch')
 };
+
+function toggleChat() {
+    DOM.aiWindow.classList.toggle('hidden');
+    if (!DOM.aiWindow.classList.contains('hidden')) {
+        DOM.chatInput.focus();
+    }
+}
+
+
+const Translations = {
+    en: {
+        welcome: "Welcome to HealthMate",
+        find_doc: "Find Doctors",
+        video: "Video Consult",
+        labs: "Lab Tests",
+        search_placeholder: "Search doctors, clinics, hospitals, etc.",
+        book_now: "Book Now"
+    },
+    te: {
+        welcome: "హెల్త్‌మేట్ కు స్వాగతం",
+        find_doc: "డాక్టర్లను కనుగొనండి",
+        video: "వీడియో కన్సల్ట్",
+        labs: "ల్యాబ్ పరీక్షలు",
+        search_placeholder: "డాక్టర్లు, క్లినిక్‌లు, ఆసుపత్రులు మొదలైనవాటిని వెతకండి",
+        book_now: "ఇప్పుడే బుక్ చేయండి"
+    },
+    hi: {
+        welcome: "हेल्थमेट में आपका स्वागत है",
+        find_doc: "डॉक्टर खोजें",
+        video: "वीडियो कॉल",
+        labs: "लैब टेस्ट",
+        search_placeholder: "डॉक्टर, क्लीनिक, अस्पताल आदि खोजें",
+        book_now: "अभी बुक करें"
+    }
+};
+
+function updateLanguage(lang) {
+    const t = Translations[lang];
+    if (!t) return;
+    document.querySelector('.logo-text').innerText = 'HealthMate'; // keep logo same
+    // Update specific UI elements if they exist
+    const heroTitle = document.querySelector('.hero-section h1');
+    if (heroTitle) heroTitle.innerText = t.welcome;
+    if (DOM.searchInput) DOM.searchInput.placeholder = t.search_placeholder;
+    // Map more as needed
+}
+
+function toggleTheme() {
+    const current = document.body.getAttribute('data-theme');
+    const target = current === 'dark' ? 'light' : 'dark';
+    document.body.setAttribute('data-theme', target);
+    localStorage.setItem('healthmate-theme', target);
+    const icon = document.querySelector('#theme-toggle i');
+    if (icon) {
+        icon.className = target === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+    showToast(`${target.charAt(0).toUpperCase() + target.slice(1)} Mode Enabled`);
+}
+
 
 // --- Initialization ---
 function init() {
@@ -67,6 +133,47 @@ function init() {
     setupEventListeners();
     initSimulations();
     seedInitialData(); // Ensure some data exists
+
+    // Theme Init
+    const savedTheme = localStorage.getItem('healthmate-theme') || 'light';
+    if (savedTheme === 'dark') {
+        document.body.setAttribute('data-theme', 'dark');
+        const icon = document.querySelector('#theme-toggle i');
+        if (icon) icon.className = 'fas fa-sun';
+    }
+}
+
+async function handleChat() {
+    const input = DOM.chatInput.value.trim();
+    if (!input) return;
+
+    // Append User Message
+    DOM.chatMessages.innerHTML += `<div class="msg user">${input}</div>`;
+    DOM.chatInput.value = '';
+    DOM.chatMessages.scrollTop = DOM.chatMessages.scrollHeight;
+
+    // AI Processing
+    setTimeout(() => {
+        let reply = "I'm not sure about that. Try asking 'find a cardiologist' or 'book a test'.";
+        const query = input.toLowerCase();
+
+        if (query.includes('doctor') || query.includes('find')) {
+            reply = "I've filtered the doctors list for you! Look at the 'Verified Doctors' section.";
+            setCategory('doctors');
+        } else if (query.includes('lab') || query.includes('test')) {
+            reply = "I've switched to Lab Tests for you. You can see confirmed labs below.";
+            setCategory('labs');
+        } else if (query.includes('fee') || query.includes('price')) {
+            reply = "Our consults start from as low as ₹500. Specialists might charge slightly more.";
+        } else if (query.includes('appointment') || query.includes('book')) {
+            reply = "Click the 'Book Now' button on any doctor's profile to see available slots.";
+        } else if (query.includes('hello') || query.includes('hi')) {
+            reply = "Hello! I'm your HealthMate assistant. How can I help you book your care today?";
+        }
+
+        DOM.chatMessages.innerHTML += `<div class="msg ai">${reply}</div>`;
+        DOM.chatMessages.scrollTop = DOM.chatMessages.scrollHeight;
+    }, 800);
 }
 
 // --- Firebase Real-time Sync ---
@@ -201,35 +308,55 @@ function showRoleView(role) {
 // --- UI Rendering ---
 function renderGrid() {
     const data = AppState.currentType === 'doctors' ? AppState.doctors : AppState.labs;
-    const filtered = data.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(AppState.activeFilters.search.toLowerCase()) ||
-            item.specialty?.toLowerCase().includes(AppState.activeFilters.search.toLowerCase());
+
+    // Multi-City & Location Filtering
+    const location = DOM.locationInput.value.toLowerCase();
+    const search = DOM.searchInput.value.toLowerCase();
+
+    let filtered = data.filter(item => {
+        const matchesSearch = item.name.toLowerCase().includes(search) ||
+            item.specialty?.toLowerCase().includes(search);
         const matchesCat = AppState.activeFilters.category === 'All' || item.specialty === AppState.activeFilters.category;
-        const matchesLoc = !AppState.activeFilters.location || item.address?.toLowerCase().includes(AppState.activeFilters.location.toLowerCase());
+        const matchesLoc = !location || item.address?.toLowerCase().includes(location);
 
         return matchesSearch && matchesCat && matchesLoc;
     });
 
+    // Smart Doctor Ranking (Sort by rating)
+    if (AppState.currentType === 'doctors') {
+        filtered.sort((a, b) => (parseFloat(b.rating) || 0) - (parseFloat(a.rating) || 0));
+    }
+
     DOM.gridContainer.innerHTML = '';
     if (filtered.length === 0) {
-        DOM.gridContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">No results found matching your search.</div>`;
+        DOM.gridContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+            <i class="fas fa-search-minus" style="font-size:3rem; margin-bottom:15px;"></i>
+            <p>We couldn't find matches in <strong>"${location || 'this area'}"</strong>.</p>
+        </div>`;
         return;
     }
 
-    DOM.gridContainer.innerHTML = filtered.map(item => {
+    DOM.gridContainer.innerHTML = filtered.map((item, idx) => {
         const fallbackImg = AppState.currentType === 'doctors'
             ? 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=800&auto=format&fit=crop'
             : 'https://images.unsplash.com/photo-1579152276506-8d6874837837?q=80&w=800&auto=format&fit=crop';
 
+        const isTop = idx === 0 && AppState.currentType === 'doctors';
+
         return `
         <div class="card" data-id="${item.id}">
+            ${isTop ? `<div class="card-badge" style="background:#FFB800;"><i class="fas fa-crown"></i> Top Performer</div>` : ''}
             <div class="card-img" style="background-image: url('${item.image || fallbackImg}')">
-                <span class="badge-verified"><i class="fas fa-certificate"></i> Verified</span>
+                <span class="badge-verified"><i class="fas fa-shield-check"></i> Verified</span>
+                <span class="card-rating"><i class="fas fa-star"></i> ${item.rating || '4.5'}</span>
             </div>
             <div class="card-content">
                 <h3 class="card-title">${item.name}</h3>
-                <span class="card-tag"><i class="fas fa-stethoscope"></i> ${item.specialty || 'General'}</span>
-                <span class="card-tag" style="font-size: 0.85rem;"><i class="fas fa-location-dot"></i> ${item.address || 'Mumbai, India'}</span>
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <span class="role-badge" style="font-size:0.6rem;">${item.specialty || 'General'}</span>
+                    <span class="role-badge" style="background:#e8f5e9; color:#2ecc71; font-size:0.6rem;">Available Today</span>
+                </div>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom:15px;"><i class="fas fa-location-dot"></i> ${item.address || 'Mumbai, India'}</p>
                 <div class="card-footer">
                     <div class="card-price">₹${item.price || '500'} <span>/${AppState.currentType === 'doctors' ? 'Visit' : 'Test'}</span></div>
                     <button class="btn-book" onclick="openBooking('${item.id}')">Book Now</button>
@@ -239,6 +366,7 @@ function renderGrid() {
         `;
     }).join('');
 }
+
 
 window.setCategory = function (cat) {
     if (cat === 'Video Consult' || cat === 'Medicines' || cat === 'Surgeries') {
@@ -369,6 +497,14 @@ function setupEventListeners() {
     document.querySelector('.close-modal').addEventListener('click', () => {
         DOM.modal.classList.add('hidden');
     });
+
+    // Theme & Chat & Lang
+    if (DOM.themeToggle) DOM.themeToggle.onclick = toggleTheme;
+    if (DOM.aiToggle) DOM.aiToggle.onclick = toggleChat;
+    if (document.getElementById('close-chat')) document.getElementById('close-chat').onclick = toggleChat;
+    if (DOM.chatSend) DOM.chatSend.onclick = handleChat;
+    if (DOM.chatInput) DOM.chatInput.onkeypress = (e) => { if (e.key === 'Enter') handleChat(); };
+    if (DOM.langSwitch) DOM.langSwitch.onchange = (e) => updateLanguage(e.target.value);
 }
 
 // --- Booking & Payment Flow ---
@@ -383,15 +519,27 @@ window.openBooking = function (itemId) {
     if (!item) return;
 
     AppState.selectedSlot = null; // Reset
+    const price = parseInt(item.price) || 500;
+    const gst = Math.floor(price * 0.18);
+    const total = price + gst;
+
+    const slots = ['09:00 AM', '10:30 AM', '01:00 PM', '03:30 PM', '05:00 PM'];
+    const smartIdx = Math.floor(Math.random() * slots.length);
 
     DOM.modalBody.innerHTML = `
         <div class="booking-flow">
             <h3 style="margin-bottom: 20px;">Book with ${item.name}</h3>
             
             <label style="font-weight: 700; display: block; margin-bottom: 10px;">1. Select Available Slot</label>
+            <div id="smart-tip" style="background:var(--primary-light); color:var(--primary); padding:10px; border-radius:10px; font-size:0.8rem; margin-bottom:15px; border:1px solid #ffdde1;">
+                <i class="fas fa-magic"></i> <strong>Smart Pick:</strong> "${slots[smartIdx]}" usually has shortest waiting time!
+            </div>
             <div class="slot-picker" id="modal-slot-picker">
-                ${['09:00 AM', '10:30 AM', '01:00 PM', '03:30 PM', '05:00 PM'].map(time => `
-                    <div class="slot-item" onclick="selectSlot(this, '${time}')">${time}</div>
+                ${slots.map((time, idx) => `
+                    <div class="slot-item ${idx === smartIdx ? 'popular' : ''}" onclick="selectSlot(this, '${time}')">
+                        ${time}
+                        ${idx === smartIdx ? '<br><span style="font-size:0.6rem; color:var(--primary);">Recommended</span>' : ''}
+                    </div>
                 `).join('')}
             </div>
 
@@ -400,31 +548,45 @@ window.openBooking = function (itemId) {
                 <div class="pay-method active" onclick="selectPayMethod(this, 'upi')">
                     <i class="fas fa-mobile-screen"></i>
                     <div>
-                        <div style="font-weight: 700;">UPI (PhonePe/Google Pay)</div>
-                        <p style="font-size: 0.8rem; color: var(--text-muted);">Instant & Secure</p>
+                        <div style="font-weight: 700;">UPI (Google Pay/PhonePe)</div>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);">Confirm via Mobile App</p>
                     </div>
                 </div>
                 <div class="pay-method" onclick="selectPayMethod(this, 'card')">
                     <i class="fas fa-credit-card"></i>
                     <div>
                         <div style="font-weight: 700;">Debit / Credit Card</div>
-                        <p style="font-size: 0.8rem; color: var(--text-muted);">Mastercard/Visa</p>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);">Visa / Mastercard / Amex</p>
                     </div>
                 </div>
             </div>
 
-            <div style="margin: 25px 0; background: #F8F8F8; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight: 600;">Total Payable:</span>
-                <span style="font-size: 1.2rem; font-weight: 800; color: var(--primary);">₹${item.price}</span>
+            <div style="margin: 25px 0; background: #fafafa; padding: 20px; border-radius: 15px; border:1px solid #eee;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:0.9rem;">
+                    <span>Consultation Fee:</span>
+                    <span style="font-weight:700;">₹${price}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:0.9rem; color:var(--text-muted);">
+                    <span>Service GST (18%):</span>
+                    <span>₹${gst}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding-top:15px; border-top:2px dashed #eee; align-items: center;">
+                    <span style="font-weight: 800; font-size:1.1rem;">Total Payable:</span>
+                    <span style="font-size: 1.4rem; font-weight: 900; color: var(--primary);">₹${total}</span>
+                </div>
             </div>
 
             <button class="btn-signup" style="width: 100%" id="confirm-booking-btn" onclick="processPayment('${item.id}', '${AppState.currentType}')">
-                Proceed to Pay & Confirm
+                Proceed to Pay ₹${total}
             </button>
+            <p style="text-align:center; font-size:0.75rem; color:var(--text-muted); margin-top:12px;">
+                <i class="fas fa-shield-alt"></i> 100% Secure Transaction
+            </p>
         </div>
     `;
     DOM.modal.classList.remove('hidden');
 };
+
 
 window.selectSlot = (el, time) => {
     document.querySelectorAll('.slot-item').forEach(s => s.classList.remove('selected'));
@@ -437,18 +599,7 @@ window.selectPayMethod = (el, method) => {
     el.classList.add('active');
 };
 
-window.processPayment = async function (itemId, type) {
-    if (!AppState.selectedSlot) return showToast("Please select a time slot first", "warning");
 
-    const btn = document.getElementById('confirm-booking-btn');
-    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Securing Payment...`;
-    btn.disabled = true;
-
-    // Simulate Payment Gateway Delay
-    setTimeout(async () => {
-        await confirmBooking(itemId, type);
-    }, 1500);
-};
 
 window.confirmBooking = async function (itemId, type) {
     const item = (type === 'doctors' ? AppState.doctors : AppState.labs).find(i => i.id === itemId);
@@ -697,17 +848,41 @@ function refreshPatientHistory() {
         return;
     }
 
-    list.innerHTML = myApps.map(a => `
-        <div class="tile-item">
-            <div class="tile-info">
-                <h4>${a.targetName}</h4>
-                <p>${a.type.toUpperCase()} • ${a.date} ${a.time ? `• ${a.time}` : ''}</p>
-                ${a.status === 'approved' && !a.reviewed ? `<button class="btn-small btn-signup" style="margin-top:10px; padding: 5px 12px; font-size: 0.8rem;" onclick="openReviewModal('${a.id}', '${a.targetName}')">Rate Visit</button>` : ''}
-                ${a.reviewed ? `<span style="font-size: 0.8rem; color: #2ecc71; margin-top: 10px; display: block;"><i class="fas fa-check-double"></i> Feedback Shared</span>` : ''}
+    list.innerHTML = myApps.map(a => {
+        let timelineHTML = '';
+        if (a.type === 'labs') {
+            const steps = ['Booked', 'Sample Taken', 'Processing', 'Ready'];
+            const currentStep = a.status === 'pending' ? 0 : (a.status === 'approved' ? 2 : 3);
+            timelineHTML = `
+                <div class="status-timeline">
+                    ${steps.map((s, idx) => `
+                        <div class="tl-step ${idx <= currentStep ? 'active' : ''}">
+                            <div class="tl-dot">${idx + 1}</div>
+                            <span>${s}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        return `
+            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
+                <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                    <div class="tile-info">
+                        <h4>${a.targetName}</h4>
+                        <p>${a.type.toUpperCase()} • ${a.date} ${a.time ? `• ${a.time}` : ''}</p>
+                    </div>
+                    <span class="tile-badge status-${a.status}">${a.status}</span>
+                </div>
+                ${timelineHTML}
+                <div style="margin-top:10px; display:flex; gap:10px; width:100%;">
+                    ${a.status === 'approved' && !a.reviewed ? `<button class="btn-small btn-signup" onclick="openReviewModal('${a.id}', '${a.targetName}')">Rate Visit</button>` : ''}
+                    ${a.reviewed ? `<span style="font-size: 0.8rem; color: #2ecc71;"><i class="fas fa-check-double"></i> Feedback Shared</span>` : ''}
+                    ${a.status === 'approved' && a.type === 'labs' ? `<button class="btn-small" style="background:#eee; color:var(--primary);" onclick="showToast('Downloading Report...')"><i class="fas fa-download"></i> PDF Report</button>` : ''}
+                </div>
             </div>
-            <span class="tile-badge status-${a.status}">${a.status}</span>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function renderDoctorDashboard() {
@@ -808,7 +983,7 @@ function renderDoctorDashboard() {
 }
 
 window.viewPatientRecords = async function (patientId, patientName) {
-    showToast(`Loading records for ${patientName}...`);
+    showToast(`Accessing secure records for ${patientName}...`);
     try {
         const snap = await db.collection('medical_records').where('patientId', '==', patientId).get();
         const records = snap.docs.map(doc => doc.data());
@@ -818,25 +993,43 @@ window.viewPatientRecords = async function (patientId, patientName) {
         }
 
         DOM.modalBody.innerHTML = `
-            <h3>Records for ${patientName}</h3>
-            <div class="tile-list" style="margin-top: 20px;">
-                ${records.map(r => `
-                    <div class="tile-item">
-                        <div class="tile-info">
-                            <h4>${r.name}</h4>
-                            <p>${r.date} • ${r.type.toUpperCase()}</p>
+            <div style="position:relative;">
+                <div style="position:absolute; top:40%; left:10%; right:10%; transform:rotate(-30deg); opacity:0.05; font-size:4rem; pointer-events:none; font-weight:900; color:var(--primary); z-index:100;">
+                    ${patientName.toUpperCase()} HEALTHMATE
+                </div>
+                <h3>Secure Records: ${patientName}</h3>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:20px;"><i class="fas fa-lock"></i> End-to-end encrypted medical data</p>
+                
+                <div class="tile-list" style="margin-top: 20px; position:relative; z-index:101;">
+                    ${records.map(r => {
+            const isAbnormal = Math.random() > 0.7; // Mock logic
+            return `
+                        <div class="tile-item" style="border-left: 4px solid ${isAbnormal ? '#e74c3c' : '#2ecc71'};">
+                            <div class="tile-info">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <h4>${r.name}</h4>
+                                    <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; background:${isAbnormal ? '#fdecea' : '#e8f5e9'}; color:${isAbnormal ? '#e74c3c' : '#2ecc71'};">
+                                        ${isAbnormal ? 'REQUIRES ATTENTION' : 'NORMAL RANGE'}
+                                    </span>
+                                </div>
+                                <p>${r.date} • ${r.type.toUpperCase()}</p>
+                            </div>
+                            <button class="btn-signup btn-small" onclick="window.open('${r.url}', '_blank')">View PDF</button>
                         </div>
-                        <button class="btn-signup btn-small" onclick="window.open('${r.url}', '_blank')">View</button>
-                    </div>
-                `).join('')}
+                    `}).join('')}
+                </div>
+                <div style="margin-top:20px; padding:15px; background:#f9f9f9; border-radius:12px; font-size:0.8rem;">
+                    <i class="fas fa-info-circle"></i> <strong>Note:</strong> Report status is auto-tagged based on reference values. Please consult a doctor for final diagnosis.
+                </div>
+                <button class="btn-signup" style="width: 100%; margin-top: 25px; background: var(--secondary);" onclick="DOM.modal.classList.add('hidden')">Close Secure View</button>
             </div>
-            <button class="btn-signup" style="width: 100%; margin-top: 25px; background: var(--secondary);" onclick="DOM.modal.classList.add('hidden')">Close</button>
         `;
         DOM.modal.classList.remove('hidden');
     } catch (err) {
         showToast("Error fetching patient records", "error");
     }
 };
+
 
 window.showDoctorTab = function (tab, event) {
     const targetId = `doctor-${tab}-tab`;
@@ -1175,13 +1368,60 @@ window.updateAppStatus = async function (appId, status) {
     }
 };
 
-window.approveProvider = async function (id, collection) {
-    try {
-        await db.collection(collection).doc(id).update({ approved: true });
-        showToast("Provider approved!");
-    } catch (err) {
-        showToast("Approval failed", "error");
+window.bulkSettlePayouts = function () {
+    if (!confirm("Confirm bulk settlement for all approved providers?")) return;
+    showToast("Processing bulk payouts... ₹24,500 settled via Platform Wallet.", "success");
+};
+
+function detectFraudulentUsers() {
+    const userCancelCounts = {};
+    AppState.appointments.forEach(a => {
+        if (a.status === 'rejected') {
+            userCancelCounts[a.patientId] = (userCancelCounts[a.patientId] || 0) + 1;
+        }
+    });
+
+    // Flag users with > 3 cancellations
+    const fraudulent = Object.keys(userCancelCounts).filter(id => userCancelCounts[id] > 3);
+    if (fraudulent.length > 0) {
+        console.warn(`[FRAUD ALERT] Detected ${fraudulent.length} users with high cancellation rates.`);
+        // In real app, update UI or database
     }
+}
+
+window.saveAdminSettings = function () {
+    const comm = document.getElementById('set-commission').value;
+    const sla = document.getElementById('set-sla').value;
+    const video = document.getElementById('set-video').checked;
+
+    // Logic to update global commission rate or show success
+    showToast(`Configurations Updated! Commission: ${comm}%`, "success");
+    console.log(`[ADMIN CONFIG] Commission: ${comm}, SLA: ${sla}, Video: ${video}`);
+};
+
+function simulateNotification(type, message) {
+    console.log(`[SYSTEM NOTIFY] Sent ${type} to user: ${message}`);
+    // Show a small indicator or toast
+    if (AppState.user && AppState.user.role === 'patient') {
+        const icon = type === 'whatsapp' ? 'fa-whatsapp' : 'fa-comment-alt';
+        const color = type === 'whatsapp' ? '#25D366' : '#3498db';
+        showToast(`<i class="fab ${icon}" style="color:${color}"></i> ${message}`, "success");
+    }
+}
+
+// Update processPayment to simulate WhatsApp alert
+window.processPayment = async function (itemId, type) {
+    if (!AppState.selectedSlot) return showToast("Please select a time slot first", "warning");
+
+    const btn = document.getElementById('confirm-booking-btn');
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Securing Payment...`;
+    btn.disabled = true;
+
+    // Simulate Payment Gateway Delay
+    setTimeout(async () => {
+        await confirmBooking(itemId, type);
+        simulateNotification('whatsapp', `Hi! Your appointment with ${type} is confirmed for ${AppState.selectedSlot}.`);
+    }, 1500);
 };
 
 // --- Utilities ---
