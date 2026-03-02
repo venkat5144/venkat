@@ -1406,10 +1406,10 @@ function initAdminCharts() {
             datasets: [{
                 label: 'Monthly Revenue (₹)',
                 data: [12000, 19000, 3000, 5000, 2000, 30000, 45000],
-                borderColor: '#2C3E50',
+                borderColor: '#A91D3A',
                 tension: 0.4,
                 fill: true,
-                backgroundColor: 'rgba(44, 62, 80, 0.1)'
+                backgroundColor: 'rgba(169, 29, 58, 0.1)'
             }]
         },
         options: { responsive: true, plugins: { legend: { display: false } } }

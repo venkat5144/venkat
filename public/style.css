@@ -1,19 +1,18 @@
 :root {
-    /* Classic Professional Medical Palette */
-    --primary: #2C3E50;
-    /* Trustworthy Navy */
-    --primary-dark: #1A252F;
-    --primary-light: #F4F7F9;
-    --secondary: #34495E;
-    --accent: #3498DB;
-    /* Professional Blue */
-    --accent-light: #EBF5FB;
-    --bg-light: #F8FAFC;
-    --text-main: #2C3E50;
-    --text-muted: #7F8C8D;
+    /* Classic Professional Deep Red Palette */
+    --primary: #A91D3A;
+    /* Established Deep Red */
+    --primary-dark: #841629;
+    --primary-light: #FFF5F6;
+    --secondary: #1A1A1A;
+    --accent: #C40C0C;
+    --accent-light: #FFEBEC;
+    --bg-light: #FDFDFD;
+    --text-main: #1A1A1A;
+    --text-muted: #666666;
     --white: #FFFFFF;
     --glass: rgba(255, 255, 255, 0.95);
-    --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.05);
+    --shadow-soft: 0 4px 12px rgba(169, 29, 58, 0.05);
     --shadow-medium: 0 8px 24px rgba(0, 0, 0, 0.08);
     --transition-fast: all 0.2s ease;
     --transition-smooth: all 0.3s ease-in-out;
