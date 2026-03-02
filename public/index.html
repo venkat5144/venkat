@@ -470,7 +470,26 @@
                         </div>
                         <div class="tile-list" id="lab-technician-list"></div>
                     </div>
+                    <div id="lab-profile-tab" class="doctor-tab hidden">
+                        <h2>Lab & Center Profile</h2>
+                        <div class="profile-form">
+                            <div class="input-group">
+                                <label>Center Image / Logo</label>
+                                <input type="file" id="lab-profile-image" accept="image/*">
+                            </div>
+                            <div class="input-group"><label>Primary Specialty</label><input type="text"
+                                    id="lab-profile-spec" placeholder="e.g. Pathology, Imaging"></div>
+                            <div class="input-group"><label>Average Test Fee (₹)</label><input type="number"
+                                    id="lab-profile-fee">
+                            </div>
+                            <div class="input-group"><label>Lab Address</label><textarea
+                                    id="lab-profile-address"></textarea></div>
+                            <button class="btn-signup" onclick="saveLabProfile()" style="width:100%;">Save
+                                Profile Changes</button>
+                        </div>
+                    </div>
                 </main>
+
 
             </div>
         </section>

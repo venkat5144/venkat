@@ -1117,6 +1117,35 @@ window.saveDoctorProfile = async function () {
     }
 };
 
+window.saveLabProfile = async function () {
+    const spec = document.getElementById('lab-profile-spec').value;
+    const fee = document.getElementById('lab-profile-fee').value;
+    const address = document.getElementById('lab-profile-address').value;
+    const photoFile = document.getElementById('lab-profile-image').files[0];
+
+    if (!AppState.user) return;
+    try {
+        let photoURL = AppState.user.image;
+        if (photoFile) {
+            showToast("Uploading lab logo...");
+            photoURL = await uploadFile(photoFile, `labs/${AppState.user.id}`);
+        }
+
+        await db.collection('labs').doc(AppState.user.id).update({
+            specialty: spec,
+            price: fee,
+            address: address,
+            image: photoURL
+        });
+
+        showToast("Lab Profile Updated!");
+        refreshActiveDashboard();
+    } catch (err) {
+        showToast("Save failed", "error");
+    }
+};
+
+
 function renderLabDashboard() {
     console.log("[DASHBOARD] Rendering Lab View");
     const list = document.getElementById('lab-requests-list');
@@ -1204,7 +1233,15 @@ window.showLabTab = function (tab, event) {
 
     if (tab === 'summary') renderLabDashboard();
     if (tab === 'technician') renderLabTechnician();
+
+    if (tab === 'profile' && AppState.user) {
+        const currentLab = AppState.labs.find(l => l.id === AppState.user.id) || AppState.user;
+        document.getElementById('lab-profile-spec').value = currentLab.specialty || '';
+        document.getElementById('lab-profile-fee').value = currentLab.price || '';
+        document.getElementById('lab-profile-address').value = currentLab.address || '';
+    }
 };
+
 
 function renderLabTechnician() {
     const list = document.getElementById('lab-technician-list');
