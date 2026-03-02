@@ -4,8 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HealthMate | Doctors & Labs</title>
-    <link rel="stylesheet" href="style.css">
+    <title>HealthMate | Digital Clinic & Lab Assistant</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css?v=2.0.8">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -16,6 +17,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 
     <script>
         // Your web app's Firebase configuration
@@ -184,14 +188,22 @@
                     <div class="section-header"
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
                         <h2 id="section-title">Verified Doctors</h2>
-                        <div class="category-filters" style="display: flex; gap: 10px;">
-                            <button class="filter-btn active"
-                                style="padding: 8px 20px; border-radius: 50px; background: var(--primary); color: var(--white); border: none; font-weight: 600; cursor: pointer;">All</button>
-                            <button class="filter-btn"
-                                style="padding: 8px 20px; border-radius: 50px; border: 1px solid #DDD; background: white; cursor: pointer;">Available
-                                Today</button>
+                        <div class="category-filters" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="filter-btn active">All</button>
+                            <select id="filter-lang" class="filter-select" style="border-radius:50px;">
+                                <option value="">Any Language</option>
+                                <option value="english">English</option>
+                                <option value="hindi">Hindi</option>
+                                <option value="telugu">Telugu</option>
+                            </select>
+                            <select id="filter-rating" class="filter-select" style="border-radius:50px;">
+                                <option value="0">Any Rating</option>
+                                <option value="4">4.0+ Stars</option>
+                                <option value="4.5">4.5+ Stars</option>
+                            </select>
                         </div>
                     </div>
+
                     <div class="grid-container" id="grid-container">
                         <!-- Content injected by JS -->
                     </div>
@@ -398,8 +410,12 @@
                             Requests</button>
                         <button class="menu-item" onclick="showLabTab('catalog', event)"><i class="fas fa-list"></i>
                             Catalog</button>
+                        <button class="menu-item" onclick="showLabTab('technician', event)"><i
+                                class="fas fa-truck-pickup"></i>
+                            Pickup Routes</button>
                         <button class="menu-item" onclick="showLabTab('profile', event)"><i
                                 class="fas fa-building-user"></i> Profile</button>
+
                     </nav>
                 </aside>
                 <main class="doctor-main-content">
@@ -435,7 +451,27 @@
                         </div>
                         <div class="tile-list" id="lab-catalog-list"></div>
                     </div>
+                    <div id="lab-technician-tab" class="doctor-tab hidden">
+                        <h2>Technician & Sample Collection</h2>
+                        <div class="stats-grid"
+                            style="display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-bottom:20px;">
+                            <div class="admin-stat-card">
+                                <h3>12</h3>
+                                <p>Active Routes</p>
+                            </div>
+                            <div class="admin-stat-card">
+                                <h3>$8</h3>
+                                <p>Assignees</p>
+                            </div>
+                            <div class="admin-stat-card">
+                                <h3>24</h3>
+                                <p>Today's Pickups</p>
+                            </div>
+                        </div>
+                        <div class="tile-list" id="lab-technician-list"></div>
+                    </div>
                 </main>
+
             </div>
         </section>
 
@@ -455,6 +491,9 @@
                                 class="fas fa-money-bill-transfer"></i> Payouts</button>
                         <button class="menu-item" onclick="showAdminTab('users', event)"><i class="fas fa-users"></i>
                             Users</button>
+                        <button class="menu-item" onclick="showAdminTab('cms', event)"><i class="fas fa-edit"></i>
+                            CMS / Content</button>
+
                         <button class="menu-item" onclick="showAdminTab('reports', event)"><i
                                 class="fas fa-file-invoice-dollar"></i>
                             Analytics</button>
@@ -490,11 +529,9 @@
                     </div>
                     <div id="admin-reports-tab" class="doctor-tab hidden">
                         <h2>Advanced Analytics</h2>
-                        <div id="admin-revenue-chart"
-                            style="height:300px; background:#f9f9f9; border-radius:15px; display:flex; align-items:center; justify-content:center; border:1px dashed #ddd; margin-bottom:30px;">
-                            <p style="color:var(--text-muted);">[Interactive Revenue Graph]</p>
-                        </div>
+                        <canvas id="revenueChart" style="max-height: 300px; width:100%; margin-bottom: 30px;"></canvas>
                         <div class="grid-container" style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+
                             <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
                                 <h4>Top Performers</h4>
                                 <div id="admin-top-performers" style="width:100%; margin-top:10px;"></div>
@@ -525,7 +562,19 @@
                                 Configurations</button>
                         </div>
                     </div>
+                    <div id="admin-cms-tab" class="doctor-tab hidden">
+                        <h2>Content Management (CMS)</h2>
+                        <div class="profile-form">
+                            <div class="input-group"><label>Home Title</label><input type="text" id="cms-home-title"
+                                    value="Welcome to HealthMate"></div>
+                            <div class="input-group"><label>Home Banner Image</label><input type="file" id="cms-banner">
+                            </div>
+                            <button class="btn-signup" onclick="saveCMS()" style="width:100%;">Update Website
+                                Content</button>
+                        </div>
+                    </div>
                 </main>
+
 
             </div>
         </section>

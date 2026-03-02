@@ -603,6 +603,9 @@ window.selectPayMethod = (el, method) => {
 
 window.confirmBooking = async function (itemId, type) {
     const item = (type === 'doctors' ? AppState.doctors : AppState.labs).find(i => i.id === itemId);
+    const token = Math.floor(Math.random() * 50) + 1;
+    const ahead = Math.floor(Math.random() * 8) + 1;
+
     const appointment = {
         patientId: AppState.user.id,
         patientName: AppState.user.name,
@@ -613,6 +616,8 @@ window.confirmBooking = async function (itemId, type) {
         price: item.price,
         status: 'pending',
         paymentStatus: 'paid',
+        tokenNumber: token,
+        queueAhead: ahead,
         date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -624,19 +629,38 @@ window.confirmBooking = async function (itemId, type) {
                 <div style="width: 80px; height: 80px; background: #E8F5E9; color: #2ecc71; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 2.5rem;">
                     <i class="fas fa-check"></i>
                 </div>
-                <h2>Payment Successful!</h2>
-                <p>Your appointment for <strong>${AppState.selectedSlot}</strong> has been confirmed.</p>
-                <div style="margin-top: 25px; font-size: 0.9rem; color: var(--text-muted);">
-                    <i class="fas fa-bell"></i> An SMS reminder will be sent 30 mins before.
+                <h2>Booking Confirmed!</h2>
+                <div style="background:var(--primary-light); padding:20px; border-radius:15px; margin:20px 0;">
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:5px;">YOUR TOKEN NUMBER</p>
+                    <h1 style="font-size:3rem; color:var(--primary); font-weight:900;">#${token}</h1>
                 </div>
-                <button class="btn-signup" style="margin-top: 30px; width: 100%;" onclick="DOM.modal.classList.add('hidden')">Done</button>
+                <p>Status: <strong>${ahead} patients ahead</strong></p>
+                <div style="margin-top: 25px; font-size: 0.9rem; color: var(--text-muted); display:flex; gap:10px; justify-content:center;">
+                    <button class="btn-small" onclick="downloadInvoice('${itemId}', '${token}')"><i class="fas fa-download"></i> Download Invoice</button>
+                    <button class="btn-small btn-signup" onclick="DOM.modal.classList.add('hidden')">Done</button>
+                </div>
             </div>
         `;
-        showToast("Booking & Payment Successful!");
+        showToast("Booking Confirmation Sent over WhatsApp!");
     } catch (err) {
         showToast("Transaction failed", "error");
     }
+}
+
+window.downloadInvoice = function (id, token) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(22);
+    doc.text("HEALTHMATE - INVOICE", 20, 30);
+    doc.setFontSize(14);
+    doc.text(`Token: #${token}`, 20, 50);
+    doc.text(`Booking ID: ${id.substring(0, 8)}`, 20, 60);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 70);
+    doc.text(`Total Paid: INR 500 (GST Inclusive)`, 20, 90);
+    doc.save(`HealthMate_Invoice_${token}.pdf`);
+    showToast("Invoice Downloaded!");
 };
+
 
 // --- Ratings & Reviews ---
 window.openReviewModal = function (appId, targetName) {
@@ -1179,7 +1203,28 @@ window.showLabTab = function (tab, event) {
     if (event && event.currentTarget) event.currentTarget.classList.add('active');
 
     if (tab === 'summary') renderLabDashboard();
+    if (tab === 'technician') renderLabTechnician();
 };
+
+function renderLabTechnician() {
+    const list = document.getElementById('lab-technician-list');
+    if (!list) return;
+    const routes = [
+        { name: "Rahul (Zone A)", status: "On Route", pickups: 5 },
+        { name: "Suresh (Zone B)", status: "Idle", pickups: 0 },
+        { name: "Amit (Zone C)", status: "Completed", pickups: 12 }
+    ];
+    list.innerHTML = routes.map(r => `
+        <div class="tile-item">
+            <div class="tile-info">
+                <h4>${r.name}</h4>
+                <p>Status: <strong>${r.status}</strong></p>
+            </div>
+            <span class="tile-badge status-${r.status === 'On Route' ? 'pending' : 'approved'}">${r.pickups} Pickups</span>
+        </div>
+    `).join('');
+}
+
 
 window.addLabTest = async function () {
     const name = document.getElementById('new-test-name').value;
@@ -1310,7 +1355,30 @@ function renderAdminDashboard() {
             </div>
         `).join('');
     }
+    initAdminCharts();
 }
+
+function initAdminCharts() {
+    const ctx = document.getElementById('revenueChart');
+    if (!ctx) return;
+    if (window.myChart) window.myChart.destroy();
+    window.myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+                label: 'Monthly Revenue (₹)',
+                data: [12000, 19000, 3000, 5000, 2000, 30000, 45000],
+                borderColor: '#2C3E50',
+                tension: 0.4,
+                fill: true,
+                backgroundColor: 'rgba(44, 62, 80, 0.1)'
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+}
+
 
 // Updated settlePayout to show the breakdown in the toast
 window.settlePayout = function (id, netAmt, grossAmt, commAmt) {
@@ -1398,6 +1466,23 @@ window.saveAdminSettings = function () {
     showToast(`Configurations Updated! Commission: ${comm}%`, "success");
     console.log(`[ADMIN CONFIG] Commission: ${comm}, SLA: ${sla}, Video: ${video}`);
 };
+
+window.saveCMS = function () {
+    const title = document.getElementById('cms-home-title').value;
+    showToast("CMS Updated: Homepage title changed to " + title);
+    const heroTitle = document.querySelector('.hero-section h1');
+    if (heroTitle) heroTitle.innerText = title;
+};
+
+// PWA Service Worker Registration
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+            console.log('SW Registered!', reg);
+        }).catch(err => console.log('SW Reg Failed', err));
+    });
+}
+
 
 function simulateNotification(type, message) {
     console.log(`[SYSTEM NOTIFY] Sent ${type} to user: ${message}`);
