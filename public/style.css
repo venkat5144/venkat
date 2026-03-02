@@ -1,19 +1,18 @@
 :root {
-    /* Classic Professional Deep Red Palette */
-    --primary: #A91D3A;
-    /* Established Deep Red */
-    --primary-dark: #841629;
+    /* Zomato Red Palette */
+    --primary: #E23744;
+    --primary-dark: #CB202D;
     --primary-light: #FFF5F6;
-    --secondary: #1A1A1A;
-    --accent: #C40C0C;
-    --accent-light: #FFEBEC;
-    --bg-light: #FDFDFD;
-    --text-main: #1A1A1A;
-    --text-muted: #666666;
+    --secondary: #1C1C1C;
+    --accent: #E23744;
+    --accent-light: #FFF0F2;
+    --bg-light: #F8F8F8;
+    --text-main: #1C1C1C;
+    --text-muted: #696969;
     --white: #FFFFFF;
     --glass: rgba(255, 255, 255, 0.95);
-    --shadow-soft: 0 4px 12px rgba(169, 29, 58, 0.05);
-    --shadow-medium: 0 8px 24px rgba(0, 0, 0, 0.08);
+    --shadow-soft: 0 4px 12px rgba(226, 55, 68, 0.08);
+    --shadow-medium: 0 8px 24px rgba(226, 55, 68, 0.12);
     --transition-fast: all 0.2s ease;
     --transition-smooth: all 0.3s ease-in-out;
     --radius-sm: 4px;
