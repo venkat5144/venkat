@@ -592,7 +592,7 @@ a {
     border-radius: 12px;
     border: none;
     background: transparent;
-    color: var(--text-muted);
+    color: var(--text-main);
     font-weight: 600;
     font-size: 1rem;
     cursor: pointer;
@@ -1683,7 +1683,7 @@ a {
     padding: 12px 20px;
     border: none;
     background: transparent;
-    color: var(--text-muted);
+    color: var(--text-main);
     text-align: left;
     border-radius: 12px;
     cursor: pointer;
