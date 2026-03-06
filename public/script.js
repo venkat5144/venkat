@@ -7,10 +7,20 @@
 // const db = firebase.firestore();
 // const auth = firebase.auth();
 
-const APP_VERSION = "2.0.5";
+const APP_VERSION = "2.1.0";
 console.log("HealthMate App Loading. Version:", APP_VERSION);
 
+
+// --- Razorpay Configuration ---
+const RAZORPAY_CONFIG = {
+    // IMPORTANT: Use rzp_test_... for local testing and rzp_live_... for actual payments.
+    key: "rzp_test_k9B5S7X9qWx3k1", // REPLACE THIS with your own Razorpay Key ID
+    name: "HealthMate",
+    description: "Doctor Consultation / Lab Test"
+};
+
 // --- Helper: File Upload ---
+
 async function uploadFile(file, path) {
     if (!file) return null;
     try {
@@ -37,6 +47,9 @@ const AppState = {
     },
     selectedSlot: null,
     records: [],
+    users: [], // New state for joining email data
+    currentOnboardingStep: 1,
+    onboardingData: {},
 };
 
 // --- DOM Elements ---
@@ -50,7 +63,7 @@ const DOM = {
     mainContent: document.getElementById('main-content'),
     gridContainer: document.getElementById('grid-container'),
     sectionTitle: document.getElementById('section-title'),
-    searchInput: document.getElementById('hero-search-input'),
+    searchInput: document.getElementById('dashboard-search-input') || document.getElementById('hero-search-input'),
     locationInput: document.getElementById('hero-location-input'),
     authOverlay: document.getElementById('auth-overlay'),
     loginCard: document.getElementById('login-card'),
@@ -105,7 +118,7 @@ const Translations = {
 function updateLanguage(lang) {
     const t = Translations[lang];
     if (!t) return;
-    document.querySelector('.logo-text').innerText = 'HealthMate'; // keep logo same
+    document.querySelector('.logo-text').innerHTML = 'Health<span>Mate</span>'; // keep logo same
     // Update specific UI elements if they exist
     const heroTitle = document.querySelector('.hero-section h1');
     if (heroTitle) heroTitle.innerText = t.welcome;
@@ -117,7 +130,11 @@ function toggleTheme() {
     const current = document.body.getAttribute('data-theme');
     const target = current === 'dark' ? 'light' : 'dark';
     document.body.setAttribute('data-theme', target);
-    localStorage.setItem('healthmate-theme', target);
+    try {
+        localStorage.setItem('healthmate-theme', target);
+    } catch (e) {
+        console.warn("LocalStorage save denied:", e.message);
+    }
     const icon = document.querySelector('#theme-toggle i');
     if (icon) {
         icon.className = target === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
@@ -132,10 +149,15 @@ function init() {
     setupRealtimeSync();
     setupEventListeners();
     initSimulations();
-    seedInitialData(); // Ensure some data exists
 
     // Theme Init
-    const savedTheme = localStorage.getItem('healthmate-theme') || 'light';
+    let savedTheme = 'light';
+    try {
+        savedTheme = localStorage.getItem('healthmate-theme') || 'light';
+    } catch (e) {
+        console.warn("LocalStorage access denied:", e.message);
+    }
+
     if (savedTheme === 'dark') {
         document.body.setAttribute('data-theme', 'dark');
         const icon = document.querySelector('#theme-toggle i');
@@ -154,21 +176,25 @@ async function handleChat() {
 
     // AI Processing
     setTimeout(() => {
-        let reply = "I'm not sure about that. Try asking 'find a cardiologist' or 'book a test'.";
+        let reply = "I'm not sure about that. Try asking 'find a cardiologist', 'test preparation', or 'book an appointment'.";
         const query = input.toLowerCase();
 
         if (query.includes('doctor') || query.includes('find')) {
-            reply = "I've filtered the doctors list for you! Look at the 'Verified Doctors' section.";
+            reply = "I've filtered the doctors list for you! Look at the 'Verified Doctors' section. You can find specialists in Cardiology, Pediatrics, etc.";
             setCategory('doctors');
         } else if (query.includes('lab') || query.includes('test')) {
-            reply = "I've switched to Lab Tests for you. You can see confirmed labs below.";
+            reply = "I've switched to Lab Tests for you. Common tests like Blood Count, MRI, and Thyroid panels are available below.";
             setCategory('labs');
+        } else if (query.includes('preparation') || query.includes('fasting')) {
+            reply = "Most blood tests require 8-12 hours of fasting. Drink only water. Avoid caffeine or heavy meals before the test.";
         } else if (query.includes('fee') || query.includes('price')) {
-            reply = "Our consults start from as low as ₹500. Specialists might charge slightly more.";
+            reply = "Our consults start from as low as ₹500. Lab tests vary by complexity. Check the catalog for details.";
         } else if (query.includes('appointment') || query.includes('book')) {
-            reply = "Click the 'Book Now' button on any doctor's profile to see available slots.";
+            reply = "Choose a provider and click 'Book Now'. My Smart Assistant will recommend the best slot with minimum wait time.";
+        } else if (query.includes('token') || query.includes('queue')) {
+            reply = "After booking, you'll receive a Token Number. You can track your position in the live queue via your 'Bookings' tab.";
         } else if (query.includes('hello') || query.includes('hi')) {
-            reply = "Hello! I'm your HealthMate assistant. How can I help you book your care today?";
+            reply = "Hello! I'm your HealthMate assistant. I can help you find doctors, understand lab preparations, or track your reports.";
         }
 
         DOM.chatMessages.innerHTML += `<div class="msg ai">${reply}</div>`;
@@ -185,17 +211,16 @@ function setupRealtimeSync() {
         console.log("Doctors sync received:", snap.size, "records");
         AppState.doctors = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         if (AppState.currentType === 'doctors') renderGrid();
+        refreshActiveDashboard(); // Ensure admin dashboard refreshes too
     }, err => {
         console.warn("Doctor Sync Error:", err.message);
-        if (err.message.includes("permission")) {
-            console.warn("Hint: Ensure firestore.rules are deployed and public read is allowed.");
-        }
     });
 
     // Listen for Labs
     db.collection('labs').onSnapshot(snap => {
         AppState.labs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         if (AppState.currentType === 'labs') renderGrid();
+        refreshActiveDashboard();
     }, err => console.warn("Lab Sync Error:", err.message));
 
     // Listen for Appointments (Global for updates)
@@ -203,6 +228,12 @@ function setupRealtimeSync() {
         AppState.appointments = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         refreshActiveDashboard();
     }, err => console.warn("Appointment Sync Error:", err.message));
+
+    // Listen for All Users (Admin joining)
+    db.collection('users').onSnapshot(snap => {
+        AppState.users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        refreshActiveDashboard();
+    }, err => console.warn("Users Sync Error:", err.message));
 }
 
 // --- Authentication Logic ---
@@ -214,8 +245,8 @@ function setupAuthListener() {
                 if (userDoc.exists) {
                     AppState.user = { id: firebaseUser.uid, ...userDoc.data() };
 
-                    // Admin Override for specific UID
-                    if (firebaseUser.uid === 'DwaDCedzWzNC5Y0qLE1e6989bR23') {
+                    // Admin Override for specific UIDs or email patterns
+                    if (firebaseUser.uid === 'DwaDCedzWzNC5Y0qLE1e6989bR23' || firebaseUser.email.includes('admin@healthmate.com')) {
                         AppState.user.role = 'admin';
                     }
 
@@ -268,12 +299,8 @@ function applyUserSession() {
             if (patientPrev) patientPrev.innerHTML = imgHTML(AppState.user.image);
             if (doctorPrev) doctorPrev.innerHTML = imgHTML(AppState.user.image);
 
-            // Prefill Doctor Specifics if applicable
-            if (AppState.user.role === 'doctor') {
-                if (document.getElementById('doc-profile-spec')) document.getElementById('doc-profile-spec').value = AppState.user.specialty || "";
-                if (document.getElementById('doc-profile-fee')) document.getElementById('doc-profile-fee').value = AppState.user.price || "";
-                if (document.getElementById('doc-profile-address')) document.getElementById('doc-profile-address').value = AppState.user.address || "";
-            }
+            // Update Sidebar UI
+            updateSidebarUI();
 
             showToast(`Logged in as ${AppState.user.name}`);
         });
@@ -281,77 +308,337 @@ function applyUserSession() {
         DOM.authBtn.innerHTML = `Login / Sign Up`;
         DOM.userInfo.classList.add('hidden');
         requestAnimationFrame(() => showRoleView('guest'));
+
+        // Reset Sidebar UI
+        updateSidebarUI();
     }
 }
 
 function showRoleView(role) {
     document.querySelectorAll('.role-section').forEach(sec => sec.classList.add('hidden'));
+    const mobileNav = document.getElementById('mobile-nav');
+    if (mobileNav) mobileNav.classList.add('hidden');
 
     if (role === 'guest' || role === 'patient') {
         document.getElementById('patient-view').classList.remove('hidden');
+        if (mobileNav) mobileNav.classList.remove('hidden');
         const secondaryNav = document.getElementById('patient-secondary-nav');
         if (role === 'patient') secondaryNav.classList.remove('hidden');
         else secondaryNav.classList.add('hidden');
         showPatientSection('home');
-    } else if (role === 'doctor') {
-        document.getElementById('doctor-view').classList.remove('hidden');
-        renderDoctorDashboard();
-    } else if (role === 'lab') {
-        document.getElementById('lab-view').classList.remove('hidden');
-        renderLabDashboard();
+    } else if (role === 'doctor' || role === 'lab') {
+        // CHECK ONBOARDING STATUS
+        const profile = role === 'doctor'
+            ? AppState.doctors.find(d => d.id === AppState.user.id)
+            : AppState.labs.find(l => l.id === AppState.user.id);
+
+        if (profile && profile.approved) {
+            document.getElementById(role + '-view').classList.remove('hidden');
+            if (role === 'doctor') renderDoctorDashboard();
+            else renderLabDashboard();
+        } else {
+            // Redirect to onboarding if not approved OR if onboarding details never submitted
+            if (profile && profile.onboardingStatus === 'submitted') {
+                // Show a "Pending Approval" screen instead of the full onboarding
+                document.getElementById(role + '-view').classList.remove('hidden');
+                document.getElementById(role + '-unapproved-alert').classList.remove('hidden');
+                if (role === 'doctor') renderDoctorDashboard();
+                else renderLabDashboard();
+            } else {
+                document.getElementById('onboarding-view').classList.remove('hidden');
+                renderOnboardingStep();
+            }
+        }
     } else if (role === 'admin') {
         document.getElementById('admin-view').classList.remove('hidden');
         renderAdminDashboard();
     }
 }
 
+
+// --- Onboarding Logic ---
+window.renderOnboardingStep = function () {
+    const step = AppState.currentOnboardingStep;
+    const role = AppState.user.role;
+    const content = document.getElementById('onboarding-step-content');
+    const stepper = document.getElementById('onboarding-stepper');
+
+    // Update Stepper
+    document.querySelectorAll('.step').forEach(s => {
+        const sNum = parseInt(s.dataset.step);
+        s.classList.toggle('active', sNum === step);
+        s.classList.toggle('completed', sNum < step);
+    });
+
+    let html = '';
+    if (step === 1) {
+        html = `
+            <h2>1. Basic Information</h2>
+            <p>Tell us more about yourself to establish your account.</p>
+            <div style="display:flex; align-items:center; gap:20px; margin-bottom:20px;">
+                <div id="onboarding-photo-preview" class="profile-img-large" style="margin:0; width:120px; height:120px;">
+                    ${AppState.onboardingData.image ? `<img src="${AppState.onboardingData.image}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : '<i class="fas fa-camera"></i>'}
+                </div>
+                <div>
+                    <label>Profile Photo</label><br>
+                    <input type="file" id="onboarding-img-input" accept="image/*" onchange="previewOnboardingPhoto(this)">
+                </div>
+            </div>
+            <div class="input-group"><label>Full Name</label><input type="text" id="ob-name" value="${AppState.onboardingData.name || AppState.user.name}"></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div class="input-group"><label>Gender</label><select id="ob-gender"><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select></div>
+                <div class="input-group"><label>Date of Birth</label><input type="date" id="ob-dob" value="${AppState.onboardingData.dob || ''}"></div>
+            </div>
+            <div class="input-group"><label>Residential Address</label><textarea id="ob-res-address">${AppState.onboardingData.resAddress || ''}</textarea></div>
+        `;
+    } else if (step === 2) {
+        if (role === 'doctor') {
+            html = `
+                <h2>2. Professional Details</h2>
+                <div class="input-group"><label>Medical Registration Number (Mandatory)</label><input type="text" id="ob-reg-num" value="${AppState.onboardingData.regNum || ''}"></div>
+                <div class="input-group"><label>Medical Council Name (State/National)</label><input type="text" id="ob-council" value="${AppState.onboardingData.council || ''}"></div>
+                <div class="input-group"><label>Qualification (e.g. MBBS, MD)</label><input type="text" id="ob-qual" value="${AppState.onboardingData.qualification || ''}"></div>
+                <div class="input-group"><label>Specialization (e.g. Cardiologist)</label><input type="text" id="ob-spec" value="${AppState.onboardingData.specialty || ''}"></div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                    <div class="input-group"><label>Total Experience (Years)</label><input type="number" id="ob-exp" value="${AppState.onboardingData.experience || ''}"></div>
+                    <div class="input-group"><label>University Name</label><input type="text" id="ob-uni" value="${AppState.onboardingData.university || ''}"></div>
+                </div>
+            `;
+        } else {
+            html = `
+                <h2>2. Lab Services & Info</h2>
+                <div class="input-group"><label>Lab Registration Number</label><input type="text" id="ob-lab-reg" value="${AppState.onboardingData.labRegNum || ''}"></div>
+                <div class="input-group"><label>GST Number (Optional)</label><input type="text" id="ob-gst" value="${AppState.onboardingData.gst || ''}"></div>
+                <div class="input-group"><label>Test Categories (e.g. Blood, X-Ray)</label><input type="text" id="ob-categories" value="${AppState.onboardingData.categories || ''}"></div>
+                <div class="input-group"><label>NABL Accredited?</label><select id="ob-nabl"><option value="Yes">Yes</option><option value="No">No</option></select></div>
+            `;
+        }
+    } else if (step === 3) {
+        html = `
+            <h2>3. ${role === 'doctor' ? 'Clinic' : 'Lab'} Location & Details</h2>
+            <div class="input-group"><label>${role === 'doctor' ? 'Clinic/Hospital' : 'Center'} Name</label><input type="text" id="ob-clinic-name" value="${AppState.onboardingData.clinicName || ''}"></div>
+            <div class="input-group"><label>Full Address</label><textarea id="ob-clinic-address">${AppState.onboardingData.clinicAddress || ''}</textarea></div>
+            <div class="map-placeholder" id="onboarding-map-marker">
+                <i class="fas fa-location-dot"></i> GPS Location Detected (19.0760° N, 72.8777° E)
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div class="input-group"><label>Consultation Fee (Offline)</label><input type="number" id="ob-fee-off" value="${AppState.onboardingData.price || '500'}"></div>
+                <div class="input-group"><label>Emergency Available?</label><select id="ob-emergency"><option value="Yes">Yes</option><option value="No">No</option></select></div>
+            </div>
+        `;
+    } else if (step === 4) {
+        html = `
+            <h2>4. Document Upload</h2>
+            <p>Upload clear scans for verification.</p>
+            <div class="upload-grid">
+                <div class="upload-card" onclick="document.getElementById('doc-id-proof').click()">
+                    <input type="file" id="doc-id-proof" class="hidden" onchange="handleDocUpload(this, 'idProof')">
+                    <i class="fas fa-id-card"></i>
+                    <h4>ID Proof</h4>
+                    <div class="upload-preview" id="preview-idProof">${AppState.onboardingData.docs?.idProof ? '✓ Uploaded' : 'Aadhaar / Govt ID'}</div>
+                </div>
+                <div class="upload-card" onclick="document.getElementById('doc-reg-cert').click()">
+                    <input type="file" id="doc-reg-cert" class="hidden" onchange="handleDocUpload(this, 'regCert')">
+                    <i class="fas fa-certificate"></i>
+                    <h4>Registration</h4>
+                    <div class="upload-preview" id="preview-regCert">${AppState.onboardingData.docs?.regCert ? '✓ Uploaded' : 'Medical/Lab Certificate'}</div>
+                </div>
+                <div class="upload-card" onclick="document.getElementById('doc-extra').click()">
+                    <input type="file" id="doc-extra" class="hidden" onchange="handleDocUpload(this, 'extraDoc')">
+                    <i class="fas fa-file-contract"></i>
+                    <h4>Other Docs</h4>
+                    <div class="upload-preview" id="preview-extraDoc">${AppState.onboardingData.docs?.extraDoc ? '✓ Uploaded' : 'Degree / License'}</div>
+                </div>
+            </div>
+        `;
+    } else if (step === 5) {
+        html = `
+            <h2>5. Bank & Payment Details</h2>
+            <div class="input-group"><label>Account Holder Name</label><input type="text" id="ob-bank-name" value="${AppState.onboardingData.bankName || ''}"></div>
+            <div class="input-group"><label>Bank Name</label><input type="text" id="ob-bank-inst" value="${AppState.onboardingData.bankInstitution || ''}"></div>
+            <div class="input-group"><label>Account Number</label><input type="text" id="ob-bank-acc" value="${AppState.onboardingData.bankAcc || ''}"></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div class="input-group"><label>IFSC Code</label><input type="text" id="ob-ifsc" value="${AppState.onboardingData.ifsc || ''}"></div>
+                <div class="input-group"><label>UPI ID (Optional)</label><input type="text" id="ob-upi" value="${AppState.onboardingData.upi || ''}"></div>
+            </div>
+        `;
+    } else if (step === 6) {
+        html = `
+            <div style="text-align:center; padding: 20px;">
+                <i class="fas fa-check-circle" style="font-size:4rem; color:#27ae60; margin-bottom:20px;"></i>
+                <h2>Agreement & Final Submission</h2>
+                <p>By clicking submit, you agree to our platform's 20% commission on bookings and the Terms of Service.</p>
+                <div style="margin: 30px 0; padding: 20px; border: 1.5px solid #eee; border-radius: 12px;">
+                    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:600;">
+                        <input type="checkbox" id="ob-agree"> I accept the Platforms Terms and Conditions
+                    </label>
+                </div>
+                <div class="input-group">
+                    <label>Digital Signature (Type your full name)</label>
+                    <input type="text" id="ob-sig" placeholder="Dr. John Doe">
+                </div>
+            </div>
+        `;
+    }
+
+    content.innerHTML = html;
+    document.getElementById('onboarding-prev').style.visibility = step === 1 ? 'hidden' : 'visible';
+    document.getElementById('onboarding-next').innerText = step === 6 ? 'Submit Application' : 'Continue';
+};
+
+window.previewOnboardingPhoto = async function (input) {
+    const file = input.files[0];
+    if (file) {
+        const url = await uploadFile(file, `temp/${AppState.user.id}/photo`);
+        AppState.onboardingData.image = url;
+        document.getElementById('onboarding-photo-preview').innerHTML = `<img src="${url}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+    }
+};
+
+window.handleDocUpload = async function (input, type) {
+    const file = input.files[0];
+    if (file) {
+        document.getElementById(`preview-${type}`).innerText = 'Uploading...';
+        const url = await uploadFile(file, `onboarding/${AppState.user.id}/${type}`);
+        if (!AppState.onboardingData.docs) AppState.onboardingData.docs = {};
+        AppState.onboardingData.docs[type] = url;
+        document.getElementById(`preview-${type}`).innerText = '✓ Uploaded';
+        showToast(`${type} uploaded successfully!`);
+    }
+};
+
+window.nextOnboardingStep = async function () {
+    // Capture current step data
+    saveCurrentStepData();
+
+    if (AppState.currentOnboardingStep < 6) {
+        AppState.currentOnboardingStep++;
+        renderOnboardingStep();
+    } else {
+        submitOnboardingApplication();
+    }
+};
+
+window.prevOnboardingStep = function () {
+    if (AppState.currentOnboardingStep > 1) {
+        AppState.currentOnboardingStep--;
+        renderOnboardingStep();
+    }
+};
+
+function saveCurrentStepData() {
+    const s = AppState.currentOnboardingStep;
+    const d = AppState.onboardingData;
+
+    if (s === 1) {
+        d.name = document.getElementById('ob-name').value;
+        d.gender = document.getElementById('ob-gender').value;
+        d.dob = document.getElementById('ob-dob').value;
+        d.resAddress = document.getElementById('ob-res-address').value;
+    } else if (s === 2) {
+        if (AppState.user.role === 'doctor') {
+            d.regNum = document.getElementById('ob-reg-num').value;
+            d.council = document.getElementById('ob-council').value;
+            d.qualification = document.getElementById('ob-qual').value;
+            d.specialty = document.getElementById('ob-spec').value;
+            d.experience = document.getElementById('ob-exp').value;
+            d.university = document.getElementById('ob-uni').value;
+        } else {
+            d.labRegNum = document.getElementById('ob-lab-reg').value;
+            d.gst = document.getElementById('ob-gst').value;
+            d.categories = document.getElementById('ob-categories').value;
+            d.nabl = document.getElementById('ob-nabl').value;
+        }
+    } else if (s === 3) {
+        d.clinicName = document.getElementById('ob-clinic-name').value;
+        d.clinicAddress = document.getElementById('ob-clinic-address').value;
+        d.price = document.getElementById('ob-fee-off').value;
+        d.emergency = document.getElementById('ob-emergency').value;
+    } else if (s === 5) {
+        d.bankName = document.getElementById('ob-bank-name').value;
+        d.bankInstitution = document.getElementById('ob-bank-inst').value;
+        d.bankAcc = document.getElementById('ob-bank-acc').value;
+        d.ifsc = document.getElementById('ob-ifsc').value;
+        d.upi = document.getElementById('ob-upi').value;
+    }
+}
+
+async function submitOnboardingApplication() {
+    if (!document.getElementById('ob-agree').checked) {
+        return showToast("Please agree to the Terms & Conditions", "warning");
+    }
+    const sig = document.getElementById('ob-sig').value;
+    if (!sig) return showToast("Digital Signature is required", "warning");
+
+    showToast("Submitting your application...");
+    try {
+        const role = AppState.user.role;
+        const collection = role + 's';
+
+        const finalData = {
+            ...AppState.onboardingData,
+            signature: sig,
+            onboardingStatus: 'submitted',
+            approved: false,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        await db.collection(collection).doc(AppState.user.id).set(finalData, { merge: true });
+        await db.collection('users').doc(AppState.user.id).update({ onboardingStatus: 'submitted' });
+
+        showToast("Application Submitted! Admin will review shortly.", "success");
+        AppState.user.onboardingStatus = 'submitted';
+        showRoleView(role);
+    } catch (err) {
+        showToast("Submission failed: " + err.message, "error");
+    }
+}
+
 // --- UI Rendering ---
 function renderGrid() {
     const data = AppState.currentType === 'doctors' ? AppState.doctors : AppState.labs;
+    const grid = document.getElementById('grid-container'); // Fixed ID mismatch
+    if (!grid) return;
 
-    // Multi-City & Location Filtering
-    const location = DOM.locationInput.value.toLowerCase();
-    const search = DOM.searchInput.value.toLowerCase();
-
-    let filtered = data.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(search) ||
-            item.specialty?.toLowerCase().includes(search);
+    const filtered = data.filter(item => {
         const matchesCat = AppState.activeFilters.category === 'All' || item.specialty === AppState.activeFilters.category;
-        const matchesLoc = !location || item.address?.toLowerCase().includes(location);
+        const matchesSearch = item.name.toLowerCase().includes(AppState.activeFilters.search.toLowerCase()) ||
+            (item.specialty && item.specialty.toLowerCase().includes(AppState.activeFilters.search.toLowerCase()));
 
-        return matchesSearch && matchesCat && matchesLoc;
+        // Advanced Filters
+        const matchesLang = !AppState.activeFilters.language || (item.languages && item.languages.toLowerCase().includes(AppState.activeFilters.language.toLowerCase()));
+        const matchesRating = !AppState.activeFilters.rating || (parseFloat(item.rating || 0) >= AppState.activeFilters.rating);
+
+        return matchesCat && matchesSearch && matchesLang && matchesRating; // Show all for demo
     });
 
-    // Smart Doctor Ranking (Sort by rating)
-    if (AppState.currentType === 'doctors') {
-        filtered.sort((a, b) => (parseFloat(b.rating) || 0) - (parseFloat(a.rating) || 0));
-    }
-
-    DOM.gridContainer.innerHTML = '';
     if (filtered.length === 0) {
-        DOM.gridContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
-            <i class="fas fa-search-minus" style="font-size:3rem; margin-bottom:15px;"></i>
-            <p>We couldn't find matches in <strong>"${location || 'this area'}"</strong>.</p>
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px;">
+            <img src="https://cdn-icons-png.flaticon.com/512/6134/6134065.png" style="width:120px; opacity:0.3;">
+            <p style="margin-top:20px; color:var(--text-muted);">No approved ${AppState.currentType} found matching your search.</p>
         </div>`;
         return;
     }
 
-    DOM.gridContainer.innerHTML = filtered.map((item, idx) => {
-        const fallbackImg = AppState.currentType === 'doctors'
-            ? 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=800&auto=format&fit=crop'
-            : 'https://images.unsplash.com/photo-1579152276506-8d6874837837?q=80&w=800&auto=format&fit=crop';
-
-        const isTop = idx === 0 && AppState.currentType === 'doctors';
-
+    grid.innerHTML = filtered.map(item => {
+        const fallbackImg = AppState.currentType === 'doctors' ? "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=500&q=80" : "https://images.unsplash.com/photo-1511174511562-5f7f18b874f8?auto=format&fit=crop&w=500&q=80";
         return `
-        <div class="card" data-id="${item.id}">
-            ${isTop ? `<div class="card-badge" style="background:#FFB800;"><i class="fas fa-crown"></i> Top Performer</div>` : ''}
+        <div class="doctor-card" onclick="openDetailsView('${item.id}', '${AppState.currentType}')">
             <div class="card-img" style="background-image: url('${item.image || fallbackImg}')">
-                <span class="badge-verified"><i class="fas fa-shield-check"></i> Verified</span>
-                <span class="card-rating"><i class="fas fa-star"></i> ${item.rating || '4.5'}</span>
+                ${item.approved ? `<span class="badge-verified"><i class="fas fa-certificate"></i> Verified</span>` : ''}
+                <div class="card-overlay">
+                    <div style="display:flex; gap:10px; align-items:center;">
+                         <span><i class="fas fa-star" style="color:#f1c40f;"></i> ${item.rating || '4.8'}</span>
+                         <span>•</span>
+                         <span>${item.experience || '8'}+ Yrs Exp</span>
+                    </div>
+                </div>
             </div>
             <div class="card-content">
-                <h3 class="card-title">${item.name}</h3>
+                <div style="display:flex; justify-content:space-between; align-items:start;">
+                    <h3 class="card-title">${item.name}</h3>
+                    ${item.approved ? '<i class="fas fa-check-circle" style="color:#3498db; margin-top:5px;" title="Admin Verified"></i>' : ''}
+                </div>
                 <div style="display:flex; gap:10px; margin-bottom:10px;">
                     <span class="role-badge" style="font-size:0.6rem;">${item.specialty || 'General'}</span>
                     <span class="role-badge" style="background:#e8f5e9; color:#2ecc71; font-size:0.6rem;">Available Today</span>
@@ -359,7 +646,7 @@ function renderGrid() {
                 <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom:15px;"><i class="fas fa-location-dot"></i> ${item.address || 'Mumbai, India'}</p>
                 <div class="card-footer">
                     <div class="card-price">₹${item.price || '500'} <span>/${AppState.currentType === 'doctors' ? 'Visit' : 'Test'}</span></div>
-                    <button class="btn-book" onclick="openBooking('${item.id}')">Book Now</button>
+                    <button class="btn-book" onclick="event.stopPropagation(); openBooking('${item.id}')">Book Now</button>
                 </div>
             </div>
         </div>
@@ -369,14 +656,54 @@ function renderGrid() {
 
 
 window.setCategory = function (cat) {
-    if (cat === 'Video Consult' || cat === 'Medicines' || cat === 'Surgeries') {
-        return showToast(`${cat} service coming soon!`, "warning");
+    if (cat === 'Medicines') return showPatientTab('pharmacy');
+    if (cat === 'Surgeries') return showToast(`${cat} service coming soon!`, "warning");
+
+    if (cat === 'Lab Tests') {
+        AppState.currentType = 'labs';
+        renderLabTests();
+        return;
     }
-    AppState.currentType = cat; // 'doctors' or 'labs'
+
+    if (cat === 'Video Consult') {
+        AppState.currentType = 'doctors';
+        renderVideoConsult();
+        return;
+    }
+
+    AppState.currentType = cat === 'Find Doctors' ? 'doctors' : cat; // 'doctors' or 'labs'
     AppState.activeFilters.category = 'All';
-    DOM.sectionTitle.innerText = cat === 'doctors' ? 'Verified Doctors' : 'Diagnostic Labs';
+    DOM.sectionTitle.innerText = AppState.currentType === 'doctors' ? 'Verified Doctors' : 'Diagnostic Labs';
     renderGrid();
     document.getElementById('list-section').scrollIntoView({ behavior: 'smooth' });
+};
+
+window.renderVideoConsult = function () {
+    DOM.sectionTitle.innerText = "Talk to a Doctor Online (Live)";
+    const online = AppState.doctors.filter(d => d.approved);
+    const grid = document.getElementById('provider-grid');
+    if (!grid) return;
+
+    if (online.length === 0) {
+        grid.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">No doctors online currently.</p>';
+        return;
+    }
+
+    grid.innerHTML = online.map(d => `
+        <div class="doctor-card" onclick="openBooking('${d.id}')">
+            <div class="card-img" style="background-image: url('${d.image}')">
+                <span class="badge-verified" style="background:#2ecc71;"><i class="fas fa-video"></i> Online Now</span>
+            </div>
+            <div class="card-content">
+                <h3 class="card-title">${d.name}</h3>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;"><i class="fas fa-language"></i> English, Hindi • 8+ Yrs Exp</p>
+                <div class="card-footer">
+                    <div class="card-price">₹${d.price} <span>/Consult</span></div>
+                    <button class="btn-book" style="background:var(--secondary);">Connect Now</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
 };
 
 window.setSpecialty = function (spec) {
@@ -504,7 +831,16 @@ function setupEventListeners() {
     if (document.getElementById('close-chat')) document.getElementById('close-chat').onclick = toggleChat;
     if (DOM.chatSend) DOM.chatSend.onclick = handleChat;
     if (DOM.chatInput) DOM.chatInput.onkeypress = (e) => { if (e.key === 'Enter') handleChat(); };
-    if (DOM.langSwitch) DOM.langSwitch.onchange = (e) => updateLanguage(e.target.value);
+    if (DOM.langSwitch) DOM.langSwitch.onchange = (e) => {
+        AppState.activeFilters.language = e.target.value;
+        renderGrid();
+    };
+
+    const ratingFilter = document.getElementById('filter-rating');
+    if (ratingFilter) ratingFilter.onchange = (e) => {
+        AppState.activeFilters.rating = parseFloat(e.target.value);
+        renderGrid();
+    };
 }
 
 // --- Booking & Payment Flow ---
@@ -518,70 +854,89 @@ window.openBooking = function (itemId) {
     const item = (AppState.currentType === 'doctors' ? AppState.doctors : AppState.labs).find(i => i.id === itemId);
     if (!item) return;
 
-    AppState.selectedSlot = null; // Reset
+    AppState.selectedSlot = null;
+    AppState.selectedPayMethod = 'online';
     const price = parseInt(item.price) || 500;
-    const gst = Math.floor(price * 0.18);
-    const total = price + gst;
-
     const slots = ['09:00 AM', '10:30 AM', '01:00 PM', '03:30 PM', '05:00 PM'];
-    const smartIdx = Math.floor(Math.random() * slots.length);
+
+    // Smart Prediction Logic
+    const busyCounts = {};
+    slots.forEach(s => busyCounts[s] = AppState.appointments.filter(a => a.targetId === itemId && a.time === s).length);
+    const minBusy = Math.min(...Object.values(busyCounts));
+    const bestSlot = slots.find(s => busyCounts[s] === minBusy);
+    AppState.selectedSlot = bestSlot; // Auto-select the best slot
 
     DOM.modalBody.innerHTML = `
-        <div class="booking-flow">
-            <h3 style="margin-bottom: 20px;">Book with ${item.name}</h3>
-            
-            <label style="font-weight: 700; display: block; margin-bottom: 10px;">1. Select Available Slot</label>
-            <div id="smart-tip" style="background:var(--primary-light); color:var(--primary); padding:10px; border-radius:10px; font-size:0.8rem; margin-bottom:15px; border:1px solid #ffdde1;">
-                <i class="fas fa-magic"></i> <strong>Smart Pick:</strong> "${slots[smartIdx]}" usually has shortest waiting time!
+        <div class="booking-flow" style="text-align:left;">
+            <div id="smart-insight-banner" style="background:#fffcfc; border:1px solid #ffebeb; padding:12px; border-radius:10px; margin-bottom:20px; display:flex; gap:10px; align-items:start;">
+                <i class="fas fa-magic" style="color:var(--primary); margin-top:3px;"></i>
+                <div>
+                    <h5 style="color:var(--primary); margin-bottom:2px;">Smart Insight: "${bestSlot}" Recommended</h5>
+                    <p style="font-size:0.75rem; color:var(--text-muted);">This slot has the highest availability for faster service today.</p>
+                </div>
             </div>
-            <div class="slot-picker" id="modal-slot-picker">
-                ${slots.map((time, idx) => `
-                    <div class="slot-item ${idx === smartIdx ? 'popular' : ''}" onclick="selectSlot(this, '${time}')">
-                        ${time}
-                        ${idx === smartIdx ? '<br><span style="font-size:0.6rem; color:var(--primary);">Recommended</span>' : ''}
+
+            <h3 style="margin-bottom:15px; font-size:1.3rem;">Book Appointment</h3>
+            <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:25px;">${item.name} | ${item.specialty || 'Healthcare'}</p>
+
+            <label style="font-weight: 700; display: block; margin-bottom:15px;">1. Select Time Slot</label>
+            <div class="slot-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:30px;">
+                ${slots.map(s => `
+                    <div class="slot-item ${s === bestSlot ? 'selected recommended' : ''}" onclick="selectSlot(this, '${s}')" 
+                         style="border:1px solid #eee; padding:12px; border-radius:12px; text-align:center; cursor:pointer; transition:all 0.2s;">
+                        <span style="display:block; font-weight:600; font-size:0.85rem;">${s}</span>
+                        ${s === bestSlot ? '<span style="font-size:0.6rem; color:var(--primary); font-weight:700;">Smart Recommended</span>' : ''}
                     </div>
                 `).join('')}
             </div>
 
-            <label style="font-weight: 700; display: block; margin: 25px 0 10px;">2. Secure Payment</label>
-            <div class="payment-selector">
-                <div class="pay-method active" onclick="selectPayMethod(this, 'upi')">
-                    <i class="fas fa-mobile-screen"></i>
-                    <div>
-                        <div style="font-weight: 700;">UPI (Google Pay/PhonePe)</div>
-                        <p style="font-size: 0.8rem; color: var(--text-muted);">Confirm via Mobile App</p>
+            <label style="font-weight: 700; display: block; margin-bottom:15px;">2. Secure Payment</label>
+            <div class="payment-selector-premium" style="display:flex; flex-direction:column; gap:12px; margin-bottom:30px;">
+                <div class="pay-option card active" onclick="selectPayMethod(this, 'online')" 
+                     style="display:flex; align-items:center; gap:15px; padding:18px; border:1px solid var(--primary); border-radius:15px; cursor:pointer; background:#fffcfc; transition:all 0.2s;">
+                    <div style="width:40px; height:40px; background:#fff0f0; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                        <i class="fas fa-mobile-screen" style="color:var(--primary); font-size:1.2rem;"></i>
                     </div>
-                </div>
-                <div class="pay-method" onclick="selectPayMethod(this, 'card')">
-                    <i class="fas fa-credit-card"></i>
                     <div>
-                        <div style="font-weight: 700;">Debit / Credit Card</div>
-                        <p style="font-size: 0.8rem; color: var(--text-muted);">Visa / Mastercard / Amex</p>
+                        <h4 style="font-size:1rem; margin-bottom:2px;">UPI (Google Pay/PhonePe)</h4>
+                        <p style="font-size:0.75rem; color:var(--text-muted);">Confirm order via your Mobile App</p>
                     </div>
+                    <i class="fas fa-circle-check" style="margin-left:auto; color:var(--primary);"></i>
                 </div>
+
+                <div class="pay-option card" onclick="selectPayMethod(this, 'card')" 
+                     style="display:flex; align-items:center; gap:15px; padding:18px; border:1px solid #eee; border-radius:15px; cursor:pointer; background:#fff; transition:all 0.2s;">
+                    <div style="width:40px; height:40px; background:#f9f9f9; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                        <i class="fas fa-credit-card" style="color:#555; font-size:1.2rem;"></i>
+                    </div>
+                    <div>
+                        <h4 style="font-size:1rem; margin-bottom:2px;">Debit / Credit Card</h4>
+                        <p style="font-size:0.75rem; color:var(--text-muted);">Visa / Mastercard / Amex</p>
+                    </div>
+                    <i class="far fa-circle" style="margin-left:auto; color:#ddd;"></i>
+                </div>
+
             </div>
 
-            <div style="margin: 25px 0; background: #fafafa; padding: 20px; border-radius: 15px; border:1px solid #eee;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:0.9rem;">
-                    <span>Consultation Fee:</span>
+            <div class="payment-summary" style="background:#fcfcfc; border:1px solid #f0f0f0; border-radius:15px; padding:20px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:12px; font-size:0.95rem;">
+                    <span style="color:#666;">Consultation Fee:</span>
                     <span style="font-weight:700;">₹${price}</span>
                 </div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:0.9rem; color:var(--text-muted);">
-                    <span>Service GST (18%):</span>
-                    <span>₹${gst}</span>
+                <div id="booking-gst-row" style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:0.95rem;">
+                    <span style="color:#666;">Service GST (18%):</span>
+                    <span style="font-weight:600;">₹${Math.floor(price * 0.18)}</span>
                 </div>
-                <div style="display:flex; justify-content:space-between; padding-top:15px; border-top:2px dashed #eee; align-items: center;">
-                    <span style="font-weight: 800; font-size:1.1rem;">Total Payable:</span>
-                    <span style="font-size: 1.4rem; font-weight: 900; color: var(--primary);">₹${total}</span>
+                <div style="border-top:2px dashed #eee; padding-top:15px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:800; font-size:1.1rem;">Total Payable:</span>
+                    <span id="booking-total-price" data-base="${price}" style="font-size:1.6rem; font-weight:900; color:var(--primary);">₹${Math.floor(price * 1.18)}</span>
                 </div>
             </div>
 
-            <button class="btn-signup" style="width: 100%" id="confirm-booking-btn" onclick="processPayment('${item.id}', '${AppState.currentType}')">
-                Proceed to Pay ₹${total}
+            <button class="btn-signup" id="confirm-booking-btn" onclick="processPayment('${item.id}', '${AppState.currentType}')" 
+                    style="width:100%; margin-top:25px; padding:18px; font-size:1.1rem; border-radius:15px; background:var(--primary);">
+                Proceed to Payment
             </button>
-            <p style="text-align:center; font-size:0.75rem; color:var(--text-muted); margin-top:12px;">
-                <i class="fas fa-shield-alt"></i> 100% Secure Transaction
-            </p>
         </div>
     `;
     DOM.modal.classList.remove('hidden');
@@ -595,16 +950,71 @@ window.selectSlot = (el, time) => {
 };
 
 window.selectPayMethod = (el, method) => {
-    document.querySelectorAll('.pay-method').forEach(m => m.classList.remove('active'));
+    document.querySelectorAll('.pay-option').forEach(m => m.classList.remove('active'));
     el.classList.add('active');
+    AppState.selectedPayMethod = method;
+
+    const btn = document.getElementById('confirm-booking-btn');
+    const priceDisplay = document.getElementById('booking-total-price');
+    const gstRow = document.getElementById('booking-gst-row');
+    const basePrice = parseInt(priceDisplay.dataset.base || 500);
+
+
+
+    // Everything is online now
+    if (gstRow) gstRow.style.display = 'flex';
+    priceDisplay.innerText = `₹${Math.floor(basePrice * 1.18)}`;
+    btn.innerText = `Proceed to Payment`;
 };
 
+window.processPayment = function (itemId, type) {
+    console.log("[PAYMENT] Starting simulation for:", itemId, type);
+    if (!AppState.selectedSlot) return showToast("Please select a time slot", "warning");
 
+    const btn = document.getElementById('confirm-booking-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    }
 
-window.confirmBooking = async function (itemId, type) {
-    const item = (type === 'doctors' ? AppState.doctors : AppState.labs).find(i => i.id === itemId);
+    showToast("Connecting to bank... Please wait", "success");
+
+    // Skip Razorpay and simulate success for testing
+    setTimeout(() => {
+        console.log("[PAYMENT] Delay completed, calling confirmBooking");
+        if (typeof window.confirmBooking === 'function') {
+            window.confirmBooking(itemId, type, {
+                status: 'Paid',
+                mode: 'Online (Instant)',
+                transactionId: 'HM_' + Math.random().toString(36).substr(2, 9).toUpperCase()
+            }).catch(err => {
+                console.error("[PAYMENT] confirmBooking failed:", err);
+                showToast("Booking failed: " + err.message, "error");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Proceed to Payment';
+                }
+            });
+        } else {
+            console.error("[PAYMENT] window.confirmBooking is not a function!");
+            showToast("System error: Booking function not found", "error");
+        }
+    }, 2000);
+};
+
+window.confirmBooking = async function (itemId, type, paymentData = { status: 'Pending', mode: 'Offline' }) {
+    console.log("[BOOKING] Creating appointment for:", itemId, type, paymentData);
+    const items = (type === 'doctors' ? AppState.doctors : AppState.labs);
+    const item = items.find(i => i.id === itemId);
+
+    if (!item) {
+        console.error("[BOOKING] Item not found in AppState:", itemId);
+        throw new Error("Target provider not found");
+    }
+
     const token = Math.floor(Math.random() * 50) + 1;
     const ahead = Math.floor(Math.random() * 8) + 1;
+    const symptoms = document.getElementById('booking-symptoms')?.value || "";
 
     const appointment = {
         patientId: AppState.user.id,
@@ -613,9 +1023,16 @@ window.confirmBooking = async function (itemId, type) {
         targetName: item.name,
         type: type,
         time: AppState.selectedSlot,
-        price: item.price,
+        price: parseInt(item.price) || 500,
+        commission: Math.floor((parseInt(item.price) || 500) * 0.1),
         status: 'pending',
-        paymentStatus: 'paid',
+        paymentStatus: paymentData.status,
+        paymentMode: paymentData.mode,
+        transactionId: paymentData.transactionId || 'N/A',
+        symptoms: symptoms,
+        preReportUrl: AppState.bookingReportUrl || null,
+        collectionType: AppState.selectedCollection || 'visit',
+        payoutStatus: 'Pending',
         tokenNumber: token,
         queueAhead: ahead,
         date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
@@ -623,27 +1040,42 @@ window.confirmBooking = async function (itemId, type) {
     };
 
     try {
-        await db.collection('appointments').add(appointment);
+        const docRef = await db.collection('appointments').add(appointment);
+
+        // Log Transaction for Paid Bookings
+        if (paymentData.status === 'Paid') {
+            await db.collection('transactions').add({
+                bookingId: docRef.id,
+                transactionId: paymentData.transactionId,
+                amount: appointment.price * 1.18,
+                status: 'Success',
+                paymentMode: paymentData.mode,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
         DOM.modalBody.innerHTML = `
             <div style="text-align: center; padding: 20px;">
                 <div style="width: 80px; height: 80px; background: #E8F5E9; color: #2ecc71; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 2.5rem;">
                     <i class="fas fa-check"></i>
                 </div>
                 <h2>Booking Confirmed!</h2>
-                <div style="background:var(--primary-light); padding:20px; border-radius:15px; margin:20px 0;">
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:5px;">YOUR TOKEN NUMBER</p>
-                    <h1 style="font-size:3rem; color:var(--primary); font-weight:900;">#${token}</h1>
+                <p style="color:var(--text-muted); margin-bottom: 20px;">Payment Status: <strong>${paymentData.status}</strong></p>
+                <div style="background:var(--primary-light); padding:15px; border-radius:15px; margin:20px 0;">
+                    <p style="font-size:0.7rem; color:var(--text-muted); margin-bottom:5px;">TOKEN NUMBER</p>
+                    <h1 style="font-size:2.5rem; color:var(--primary); font-weight:900;">#${token}</h1>
                 </div>
-                <p>Status: <strong>${ahead} patients ahead</strong></p>
+                <p>There are <strong>${ahead} patients</strong> ahead of you.</p>
                 <div style="margin-top: 25px; font-size: 0.9rem; color: var(--text-muted); display:flex; gap:10px; justify-content:center;">
-                    <button class="btn-small" onclick="downloadInvoice('${itemId}', '${token}')"><i class="fas fa-download"></i> Download Invoice</button>
+                    <button class="btn-small" onclick="downloadInvoice('${itemId}', '${token}')"><i class="fas fa-download"></i> Receipt</button>
                     <button class="btn-small btn-signup" onclick="DOM.modal.classList.add('hidden')">Done</button>
                 </div>
             </div>
         `;
-        showToast("Booking Confirmation Sent over WhatsApp!");
+        showToast("Booking Successful! Notification sent.");
+        simulateNotification('whatsapp', `New Booking Alert: ${appointment.patientName} has booked a slot for ${appointment.time}. Payment: ${appointment.paymentStatus}.`);
     } catch (err) {
-        showToast("Transaction failed", "error");
+        showToast("Booking failed", "error");
     }
 }
 
@@ -651,14 +1083,15 @@ window.downloadInvoice = function (id, token) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     doc.setFontSize(22);
-    doc.text("HEALTHMATE - INVOICE", 20, 30);
-    doc.setFontSize(14);
-    doc.text(`Token: #${token}`, 20, 50);
-    doc.text(`Booking ID: ${id.substring(0, 8)}`, 20, 60);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 70);
-    doc.text(`Total Paid: INR 500 (GST Inclusive)`, 20, 90);
+    doc.text("HEALTHMATE - BOOKING RECEIPT", 20, 30);
+    doc.setFontSize(12);
+    doc.text(`Token Number: #${token}`, 20, 50);
+    doc.text(`Booking ID: ${id.substring(0, 10)}`, 20, 60);
+    doc.text(`Transaction Status: Paid`, 20, 70);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 80);
+    doc.text(`Fee (GST Incl): INR 500`, 20, 100);
     doc.save(`HealthMate_Invoice_${token}.pdf`);
-    showToast("Invoice Downloaded!");
+    showToast("Receipt Downloaded!");
 };
 
 
@@ -731,14 +1164,112 @@ window.showPatientSection = function (tab) {
     const target = document.getElementById(`patient-${tab}-tab`);
     if (target) target.classList.remove('hidden');
 
-    // Highlight Navigation
+    // Highlight Navigation (Desktop)
     document.querySelectorAll('.patient-nav a').forEach(a => {
         a.style.color = 'var(--text-muted)';
         if (a.innerText.toLowerCase().includes(tab)) a.style.color = 'var(--primary)';
     });
 
+    // Highlight Navigation (Mobile Bottom Nav)
+    document.querySelectorAll('.mobile-bottom-nav .nav-item').forEach(item => {
+        item.classList.remove('active');
+        const span = item.querySelector('span').innerText.toLowerCase();
+        if (span.includes(tab) || (tab === 'history' && span.includes('bookings'))) {
+            item.classList.add('active');
+        }
+    });
+
+    if (tab === 'home') updatePatientDashboard();
     if (tab === 'history') refreshPatientHistory();
     if (tab === 'records') refreshPatientRecords();
+};
+
+window.updatePatientDashboard = async function () {
+    if (!AppState.user) return;
+
+    const historyList = document.getElementById('home-history-list');
+    const reportsList = document.getElementById('home-reports-list');
+    const upcomingSec = document.getElementById('upcoming-appointment-section');
+    const upcomingCard = document.getElementById('upcoming-appointment-card');
+
+    // 1. Upcoming Appointment
+    const now = new Date();
+    // Simple filter for future appointments or today's pending/approved ones
+    const upcoming = AppState.appointments
+        .filter(a => a.patientId === AppState.user.id && (a.status === 'pending' || a.status === 'approved'))
+        .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+
+    if (upcoming) {
+        upcomingSec.classList.remove('hidden');
+        upcomingCard.innerHTML = `
+            <div class="tile-item" style="background: linear-gradient(135deg, #fff 0%, #fff5f6 100%); border: 1.5px solid #ffebeb; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(226, 55, 68, 0.05);">
+                <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                        <span style="background: var(--primary); color: white; padding: 4px 12px; border-radius: 50px; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.5px;">NEXT APPOINTMENT</span>
+                        <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;"><i class="fas fa-clock"></i> ${upcoming.time || 'General'}</span>
+                    </div>
+                    <h3 style="font-size: 1.4rem; margin-bottom: 5px;">${upcoming.targetName}</h3>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">${upcoming.type.toUpperCase()} • ${upcoming.date}</p>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-signup" style="padding: 10px 20px; font-size: 0.85rem;" onclick="showPatientSection('history')">View Details</button>
+                        <button class="btn-small" style="background: #fff; border: 1px solid #ddd; color: #555; padding: 10px 20px;" onclick="showToast('Connecting to clinic...')"><i class="fas fa-phone"></i> Call</button>
+                    </div>
+                </div>
+                <div style="width: 80px; height: 80px; background: white; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: var(--primary); box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
+                    <i class="fas ${upcoming.type === 'doctors' ? 'fa-user-md' : 'fa-flask-vial'}"></i>
+                </div>
+            </div>
+        `;
+    } else {
+        upcomingSec.classList.add('hidden');
+    }
+
+    // 2. Medical Reports Summary
+    try {
+        const reportsSnap = await db.collection('medical_records')
+            .where('patientId', '==', AppState.user.id)
+            .orderBy('createdAt', 'desc').limit(2).get();
+        const latestReports = reportsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        if (latestReports.length === 0) {
+            reportsList.innerHTML = `<p style="padding: 20px; text-align: center; color: var(--text-muted); background: #f9f9f9; border-radius: 15px; border: 1px dashed #ddd;">No reports available yet.</p>`;
+        } else {
+            reportsList.innerHTML = latestReports.map(r => `
+                <div class="tile-item" style="padding: 15px; background: #fff; border: 1px solid #f0f0f0; border-radius: 15px; margin-bottom: 10px; cursor: pointer;" onclick="window.open('${r.url}', '_blank')">
+                    <div style="width: 45px; height: 45px; background: #f0f7ff; color: #007bff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <div class="tile-info" style="flex: 1; margin-left: 15px;">
+                        <h4 style="font-size: 0.95rem; margin-bottom: 2px;">${r.name}</h4>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);">${r.date}</p>
+                    </div>
+                    <i class="fas fa-download" style="color: #999;"></i>
+                </div>
+            `).join('');
+        }
+    } catch (e) { console.error("Dashboard reports error:", e); }
+
+    // 3. Booking History Summary
+    const recentHistory = AppState.appointments
+        .filter(a => a.patientId === AppState.user.id)
+        .sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+
+    if (recentHistory.length === 0) {
+        historyList.innerHTML = `<p style="padding: 20px; text-align: center; color: var(--text-muted); background: #f9f9f9; border-radius: 15px; border: 1px dashed #ddd;">No past bookings found.</p>`;
+    } else {
+        historyList.innerHTML = recentHistory.map(a => `
+            <div class="tile-item" style="padding: 15px; background: #fff; border: 1px solid #f0f0f0; border-radius: 15px; margin-bottom: 10px;">
+                <div style="width: 45px; height: 45px; background: #f5f5f5; color: #666; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                    <i class="fas ${a.type === 'doctors' ? 'fa-user-md' : 'fa-vial'}"></i>
+                </div>
+                <div class="tile-info" style="flex: 1; margin-left: 15px;">
+                    <h4 style="font-size: 0.95rem; margin-bottom: 2px;">${a.targetName}</h4>
+                    <p style="font-size: 0.8rem; color: var(--text-muted);">${a.date} • ${a.status.toUpperCase()}</p>
+                </div>
+                <span class="tile-badge status-${a.status}" style="font-size: 0.65rem;">${a.status}</span>
+            </div>
+        `).join('');
+    }
 };
 
 window.refreshPatientRecords = async function () {
@@ -824,26 +1355,13 @@ window.showProfileSub = function (sub, event) {
 };
 
 window.savePatientProfile = async function () {
-    if (!AppState.user) return;
-    const newName = document.getElementById('edit-name').value;
-    const newPhone = document.getElementById('edit-phone').value;
-    try {
-        await db.collection('users').doc(AppState.user.id).update({ name: newName, phone: newPhone });
-        AppState.user.name = newName;
-        AppState.user.phone = newPhone;
-        DOM.userName.innerText = newName;
-        showToast("Profile Updated!");
-    } catch (err) {
-        showToast("Reflect failed", "error");
-    }
-};
-
-window.savePatientProfile = async function () {
-    const name = document.getElementById('edit-name').value;
-    const phone = document.getElementById('edit-phone').value;
+    const name = document.getElementById('edit-name').value.trim();
+    const phone = document.getElementById('edit-phone').value.trim();
     const photoFile = document.getElementById('patient-photo-input').files[0];
 
     if (!AppState.user) return;
+    if (!name) return showToast("Name is required", "error");
+
     try {
         let photoURL = AppState.user.image;
         if (photoFile) {
@@ -857,6 +1375,8 @@ window.savePatientProfile = async function () {
 
         AppState.user = { ...AppState.user, name, phone, image: photoURL };
         showToast("Profile Updated Successfully!");
+
+        // Full UI refresh to sync all elements (navbar, sidebar, tab previews)
         applyUserSession();
     } catch (err) {
         showToast("Update failed: " + err.message, "error");
@@ -878,31 +1398,48 @@ function refreshPatientHistory() {
             const steps = ['Booked', 'Sample Taken', 'Processing', 'Ready'];
             const currentStep = a.status === 'pending' ? 0 : (a.status === 'approved' ? 2 : 3);
             timelineHTML = `
-                <div class="status-timeline">
+                <div class="status-timeline" style="margin: 15px 0;">
                     ${steps.map((s, idx) => `
                         <div class="tl-step ${idx <= currentStep ? 'active' : ''}">
                             <div class="tl-dot">${idx + 1}</div>
-                            <span>${s}</span>
+                            <span style="font-size: 0.7rem;">${s}</span>
                         </div>
                     `).join('')}
                 </div>
             `;
         }
 
+        const reportBadge = a.reportStatus ? `
+            <span style="font-size:0.7rem; padding:4px 8px; border-radius:10px; background:${a.reportStatus === 'normal' ? '#e8f5e9' : '#ffebee'}; color:${a.reportStatus === 'normal' ? '#2ecc71' : '#e74c3c'}; border:1px solid currentColor;">
+                <i class="fas ${a.reportStatus === 'normal' ? 'fa-check' : 'fa-exclamation-triangle'}"></i> ${a.reportTag || 'Report'}: ${a.reportStatus.toUpperCase()}
+            </span>
+        ` : '';
+
         return `
-            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
+            <div class="tile-item" style="flex-direction:column; align-items:flex-start; position:relative;">
                 <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
                     <div class="tile-info">
-                        <h4>${a.targetName}</h4>
-                        <p>${a.type.toUpperCase()} • ${a.date} ${a.time ? `• ${a.time}` : ''}</p>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <h4 style="margin:0;">${a.targetName}</h4>
+                            <span style="background:var(--secondary); color:white; padding:2px 8px; border-radius:5px; font-size:0.7rem; font-weight:700;">Token: #${a.tokenNumber || 'NA'}</span>
+                        </div>
+                        <p style="margin-top:5px;">${a.type.toUpperCase()} • ${a.date} ${a.time ? `• ${a.time}` : ''}</p>
                     </div>
                     <span class="tile-badge status-${a.status}">${a.status}</span>
                 </div>
+                
                 ${timelineHTML}
+                
+                <div style="margin: 10px 0; display:flex; gap:15px; align-items:center; width:100%;">
+                    ${a.status === 'pending' ? `<p style="font-size:0.8rem; color:var(--primary); font-weight:600;"><i class="fas fa-users"></i> Queue Status: ${a.queueAhead || 0} patients ahead</p>` : ''}
+                    ${reportBadge}
+                </div>
+
                 <div style="margin-top:10px; display:flex; gap:10px; width:100%;">
                     ${a.status === 'approved' && !a.reviewed ? `<button class="btn-small btn-signup" onclick="openReviewModal('${a.id}', '${a.targetName}')">Rate Visit</button>` : ''}
                     ${a.reviewed ? `<span style="font-size: 0.8rem; color: #2ecc71;"><i class="fas fa-check-double"></i> Feedback Shared</span>` : ''}
-                    ${a.status === 'approved' && a.type === 'labs' ? `<button class="btn-small" style="background:#eee; color:var(--primary);" onclick="showToast('Downloading Report...')"><i class="fas fa-download"></i> PDF Report</button>` : ''}
+                    ${a.status === 'completed' && a.reportUrl ? `<button class="btn-small" style="background:#eee; color:var(--primary);" onclick="window.open('${a.reportUrl}')"><i class="fas fa-download"></i> View ${a.reportTag || 'Report'}</button>` : ''}
+                    <button class="btn-small" style="background:#f9f9f9; color:#555; border:1px solid #ddd;" onclick="downloadInvoice('${a.targetId}', '${a.tokenNumber || 0}')"><i class="fas fa-file-invoice"></i> Invoice</button>
                 </div>
             </div>
         `;
@@ -990,7 +1527,12 @@ function renderDoctorDashboard() {
     list.innerHTML = myApps.map(a => `
         <div class="tile-item">
             <div class="tile-info" style="flex:1;">
-                <h4>${a.patientName}</h4>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <h4>${a.patientName}</h4>
+                    <span style="font-size:0.65rem; padding:2px 8px; border-radius:10px; background:${a.paymentStatus === 'Paid' ? '#e8f5e9' : '#fff3cd'}; color:${a.paymentStatus === 'Paid' ? '#2ecc71' : '#856404'}; border:1px solid currentColor;">
+                        ${a.paymentStatus === 'Paid' ? '<i class="fas fa-check-circle"></i> Paid' : '<i class="fas fa-clock"></i> Unpaid'}
+                    </span>
+                </div>
                 <p>Slot: <strong>${a.time || 'General'}</strong> • ${a.date} • ${a.status.toUpperCase()}</p>
                 <button class="btn-small" style="margin-top: 10px; background: #f0f0f0; color: var(--secondary);" onclick="viewPatientRecords('${a.patientId}', '${a.patientName}')">
                     <i class="fas fa-folder-open"></i> View Records
@@ -1070,6 +1612,105 @@ window.showDoctorTab = function (tab, event) {
     if (event && event.currentTarget) event.currentTarget.classList.add('active');
 
     if (tab === 'summary') renderDoctorDashboard();
+};
+
+window.openDetailsView = function (itemId, type) {
+    const item = (type === 'doctors' ? AppState.doctors : AppState.labs).find(i => i.id === itemId);
+    if (!item) return;
+
+    const initials = item.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+    const fallbackImg = type === 'doctors' ? "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=500&q=80" : "https://images.unsplash.com/photo-1511174511562-5f7f18b874f8?auto=format&fit=crop&w=500&q=80";
+
+    DOM.modalBody.innerHTML = `
+        <div class="doctor-profile-view">
+            <div style="background:var(--primary-light); padding:40px 20px; border-radius:20px; text-align:center; position:relative;">
+                ${item.image ?
+            `<img src="${item.image}" style="width:120px; height:120px; border-radius:50%; object-fit:cover; margin:-20px auto 15px; border:4px solid white; box-shadow:0 4px 15px rgba(0,0,0,0.1);">` :
+            `<div class="profile-img-large" style="width:100px; height:100px; margin:-20px auto 15px; border:4px solid white;">${initials}</div>`
+        }
+                <h2 style="margin-bottom:5px;">${item.name} ${item.approved ? '<i class="fas fa-certificate" style="color:#3498db; font-size:1.2rem;" title="Verified"></i>' : ''}</h2>
+                <p style="color:var(--primary); font-weight:600;">${item.specialty || 'Professional'}</p>
+                <div style="display:flex; justify-content:center; gap:15px; margin-top:15px;">
+                    <span style="font-size:0.8rem; background:white; padding:5px 12px; border-radius:20px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+                        <i class="fas fa-star" style="color:#f1c40f;"></i> ${item.rating || '4.8'} (200+ Reviews)
+                    </span>
+                    <span style="font-size:0.8rem; background:white; padding:5px 12px; border-radius:20px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+                         <i class="fas fa-briefcase" style="color:var(--primary);"></i> ${item.experience || '8'}+ Yrs Exp
+                    </span>
+                </div>
+            </div>
+
+            <div style="padding:25px;">
+                <div style="margin-bottom:25px;">
+                    <h4 style="margin-bottom:10px;">About & Skills</h4>
+                    <p style="font-size:0.9rem; color:var(--text-muted); line-height:1.6;">
+                        Highly experienced ${item.specialty || 'specialist'} with a track record of excellence in ${type === 'doctors' ? 'patient diagnostics and treatment' : 'advanced laboratory analytics'}. 
+                        Expertise in modern clinical practices and dedicated to providing the highest standards of care.
+                        <br><br>
+                        <strong>Languages Spoken:</strong> ${item.languages || 'English, Hindi, Telugu'}
+                    </p>
+                </div>
+                
+                <div style="background:#f9f9f9; padding:20px; border-radius:15px; margin-bottom:25px;">
+                    <h4 style="margin-bottom:15px;"><i class="fas fa-hospital-user"></i> Practice Details</h4>
+                    <p style="font-size:0.9rem;"><strong>${item.clinicName || (type === 'doctors' ? 'Healthcare Center' : 'Diagnostic Center')}</strong></p>
+                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">${item.address || 'Hitech City, Hyderabad, India'}</p>
+                    <div style="display:flex; gap:10px; margin-top:15px;">
+                         <button class="btn-small" style="background:var(--secondary);" onclick="showToast('Opening Google Maps...')"><i class="fas fa-map-location-dot"></i> View on Map</button>
+                         <button class="btn-small" style="background:#fff; color:var(--text-main); border:1px solid #ddd;" onclick="showToast('Contact: +91 999 000 1111')"><i class="fas fa-phone"></i> Contact</button>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #eee; padding-top:20px;">
+                    <div>
+                        <p style="font-size:0.75rem; color:var(--text-muted);">${type === 'doctors' ? 'Consultation' : 'Test'} Fee</p>
+                        <h3 style="color:var(--primary);">₹${item.price || 500}</h3>
+                    </div>
+                    <button class="btn-signup" style="padding:12px 30px;" onclick="openBooking('${item.id}')">Book Now</button>
+                </div>
+            </div>
+        </div>
+    `;
+    DOM.modal.classList.remove('hidden');
+};
+
+window.simulateGPS = function () {
+    showToast("Detecting nearby services...");
+    const grid = document.getElementById('nearby-grid');
+    const locationText = document.getElementById('dashboard-location-text');
+
+    if (locationText) {
+        const locations = ['Hitech City', 'Banjara Hills', 'Jubilee Hills', 'Gachibowli'];
+        locationText.innerText = locations[Math.floor(Math.random() * locations.length)];
+    }
+
+    if (!grid) return;
+    grid.innerHTML = '<p style="text-align:center; padding:40px; width:100%; color:var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Localizing services...</p>';
+
+    setTimeout(() => {
+        const nearby = [...AppState.doctors, ...AppState.labs].slice(0, 4);
+        grid.innerHTML = nearby.map(item => `
+            <div class="tile-item" onclick="openDetailsView('${item.id}', '${item.type || 'doctors'}')" style="cursor:pointer;">
+                <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">${item.name[0]}</div>
+                <div class="tile-info">
+                    <h4>${item.name}</h4>
+                    <p><i class="fas fa-location-arrow"></i> ~${(Math.random() * 3).toFixed(1)} km away • ${item.specialty || 'General'}</p>
+                </div>
+                <div style="text-align:right;">
+                    <span style="color:#2ecc71; font-weight:700; font-size:0.8rem;">OPEN</span>
+                    <p style="font-size:0.7rem; color:var(--text-muted);">₹${item.price}</p>
+                </div>
+            </div>
+        `).join('');
+    }, 1500);
+};
+
+window.uploadPrescription = function () {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,application/pdf';
+    fileInput.onchange = (e) => uploadMedicalRecord(e);
+    fileInput.click();
 };
 
 window.generateSlots = function () {
@@ -1189,12 +1830,21 @@ function renderLabDashboard() {
         list.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No test requests yet.</p>`;
     } else {
         list.innerHTML = myApps.map(a => `
-            <div class="tile-item">
-                <div class="tile-info">
-                    <h4>${a.patientName}</h4>
-                    <p>Request for Diagnostic Test • ${a.date}</p>
+            <div class="tile-item" style="flex-direction:column; align-items:flex-start; gap:10px;">
+                <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                    <div class="tile-info">
+                        <h4>${a.patientName}</h4>
+                        <p>Diagnostic Request • ${a.date}</p>
+                    </div>
+                    <span class="tile-badge status-${a.status}">${a.status}</span>
                 </div>
-                <span class="tile-badge status-${a.status}">${a.status}</span>
+                ${a.status === 'pending' ? `
+                    <div style="display:flex; gap:10px; width:100%;">
+                        <button class="btn-small btn-signup" style="flex:1;" onclick="uploadLabReport('${a.id}')">
+                            <i class="fas fa-file-upload"></i> Upload & Tag Report
+                        </button>
+                    </div>
+                ` : (a.reportUrl ? `<span style="font-size:0.75rem; color:#2ecc71;"><i class="fas fa-check-circle"></i> Report Uploaded (${a.reportTag})</span>` : '')}
             </div>
         `).join('');
     }
@@ -1243,24 +1893,45 @@ window.showLabTab = function (tab, event) {
 };
 
 
-function renderLabTechnician() {
-    const list = document.getElementById('lab-technician-list');
-    if (!list) return;
-    const routes = [
-        { name: "Rahul (Zone A)", status: "On Route", pickups: 5 },
-        { name: "Suresh (Zone B)", status: "Idle", pickups: 0 },
-        { name: "Amit (Zone C)", status: "Completed", pickups: 12 }
-    ];
-    list.innerHTML = routes.map(r => `
-        <div class="tile-item">
-            <div class="tile-info">
-                <h4>${r.name}</h4>
-                <p>Status: <strong>${r.status}</strong></p>
-            </div>
-            <span class="tile-badge status-${r.status === 'On Route' ? 'pending' : 'approved'}">${r.pickups} Pickups</span>
-        </div>
-    `).join('');
-}
+// --- Lab Report Utility ---
+window.uploadLabReport = async function (appId) {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'application/pdf';
+    fileInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        showToast("Uploading Report & Tagging...");
+        try {
+            const url = await uploadFile(file, `reports/${appId}/${Date.now()}`);
+
+            // AUTO TAGGING LOGIC
+            let tag = 'General';
+            const name = file.name.toLowerCase();
+            if (name.includes('blood')) tag = 'Blood Report';
+            else if (name.includes('xray') || name.includes('x-ray')) tag = 'X-Ray';
+            else if (name.includes('mri')) tag = 'MRI Scan';
+            else if (name.includes('urine')) tag = 'Urine Test';
+
+            // NORMAL RANGE / COLOR CODING PREVIEW (Metadata)
+            const isAbnormal = Math.random() > 0.8; // Simulated logic
+
+            await db.collection('appointments').doc(appId).update({
+                reportUrl: url,
+                reportTag: tag,
+                reportStatus: isAbnormal ? 'abnormal' : 'normal',
+                status: 'completed'
+            });
+
+            showToast(`Report Uploaded! Tagged as: ${tag}`, "success");
+            renderLabDashboard();
+        } catch (err) {
+            showToast("Upload failed", "error");
+        }
+    };
+    fileInput.click();
+};
 
 
 window.addLabTest = async function () {
@@ -1314,38 +1985,47 @@ function renderAdminDashboard() {
     const payoutList = document.getElementById('admin-payout-list');
     const statsGrid = document.getElementById('admin-stats-grid');
 
-    const pendingDoctors = AppState.doctors.filter(d => !d.approved);
-    const pendingLabs = AppState.labs.filter(l => !l.approved);
-    const allPending = [...pendingDoctors, ...pendingLabs];
-
-    const now = new Date();
-    const thisMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const monthlyApps = AppState.appointments.filter(a => a.date && a.date.startsWith(thisMonthStr));
-    const monthlyRevenue = monthlyApps.filter(a => a.status === 'approved').reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
-    const platformFees = Math.floor(monthlyRevenue * 0.20);
-
-    statsGrid.innerHTML = `
-        <div class="admin-stat-card"><h3>${AppState.doctors.length}</h3><p>Total Doctors</p></div>
-        <div class="admin-stat-card"><h3>${AppState.labs.length}</h3><p>Total Labs</p></div>
-        <div class="admin-stat-card"><h3>${AppState.appointments.length}</h3><p>Total Bookings</p></div>
-        <div class="admin-stat-card" style="border: 2px solid var(--primary);"><h3>${monthlyApps.length}</h3><p>This Month Bookings</p></div>
-        <div class="admin-stat-card" style="border: 2px solid #2ecc71;"><h3>₹${monthlyRevenue}</h3><p>This Month Revenue</p></div>
-        <div class="admin-stat-card" style="border: 2px solid var(--primary); background:var(--primary-light);"><h3>₹${platformFees}</h3><p>Expected Commission</p></div>
-    `;
-
     // Verifications
-    if (allPending.length === 0) {
-        list.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No pending approvals.</p>`;
-    } else {
-        list.innerHTML = allPending.map(p => `
-            <div class="tile-item">
-                <div class="tile-info">
-                    <h4>${p.name}</h4>
-                    <p>Waiting for provider verification</p>
+    const pendingWithRole = [
+        ...AppState.doctors.filter(d => !d.approved).map(d => ({ ...d, collection: 'doctors' })),
+        ...AppState.labs.filter(l => !l.approved).map(l => ({ ...l, collection: 'labs' }))
+    ];
+
+    if (list) {
+        if (pendingWithRole.length === 0) {
+            list.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No pending approvals.</p>`;
+        } else {
+            list.innerHTML = pendingWithRole.map(p => {
+                const userObj = AppState.users.find(u => u.id === p.id);
+                return `
+                <div class="tile-item">
+                    <div class="tile-info">
+                        <h4>${p.name}</h4>
+                        <p>${p.specialty || 'Provider'} • ${userObj?.email || 'No email'}</p>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-book" style="background:#3498db;" onclick="viewProviderDetails('${p.id}', '${p.collection}')"><i class="fas fa-eye"></i> View Full Profile</button>
+                        <button class="btn-book" onclick="approveProvider('${p.id}', '${p.collection}')">Quick Approve</button>
+                    </div>
                 </div>
-                <button class="btn-book" onclick="approveProvider('${p.id}', '${p.image?.includes('lab') ? 'labs' : 'doctors'}')">Approve Now</button>
-            </div>
-        `).join('');
+            `}).join('');
+        }
+    }
+
+    const totalBookings = AppState.appointments.length;
+    const paidApps = AppState.appointments.filter(a => a.paymentStatus === 'Paid');
+    const totalRev = paidApps.reduce((acc, a) => acc + (parseInt(a.price) || 0), 0);
+    const totalComm = AppState.appointments.reduce((acc, a) => acc + (a.commission || 0), 0);
+
+    if (statsGrid) {
+        statsGrid.innerHTML = `
+            <div class="admin-stat-card"><h3>${totalBookings}</h3><p>Total Bookings</p></div>
+            <div class="admin-stat-card" style="border: 2px solid #2ecc71;"><h3>₹${totalRev}</h3><p>Total Revenue</p></div>
+            <div class="admin-stat-card" style="border: 2px solid var(--primary); background:var(--primary-light);"><h3>₹${totalComm}</h3><p>Platform Commission</p></div>
+            <div class="admin-stat-card"><h3>${AppState.doctors.length}</h3><p>Active Doctors</p></div>
+            <div class="admin-stat-card"><h3>${AppState.labs.length}</h3><p>Active Labs</p></div>
+            <div class="admin-stat-card" style="border: 1px dashed #ccc;"><h3>Approved</h3><p>Payout Status</p></div>
+        `;
     }
 
     // Financials / Payouts (with Commission)
@@ -1362,59 +2042,130 @@ function renderAdminDashboard() {
         return { ...p, grossEarnings, commission, netSettlement };
     }).filter(p => p.grossEarnings > 0);
 
-    if (payouts.length === 0) {
-        payoutList.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No pending payouts.</p>`;
+    if (payoutList) {
+        if (payouts.length === 0) {
+            payoutList.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No pending payouts.</p>`;
+        } else {
+            payoutList.innerHTML = payouts.map(p => `
+                <div class="tile-item" style="flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; width: 100%; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                        <h4 style="margin: 0;">${p.name}</h4>
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">ID: ${p.id}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; width: 100%; font-size: 0.9rem;">
+                        <div>
+                            <p style="margin: 0; color: var(--text-muted);">Patient Paid</p>
+                            <p style="margin: 5px 0 0 0; font-weight: 700;">₹${p.grossEarnings}</p>
+                        </div>
+                        <div>
+                            <p style="margin: 0; color: var(--primary);">- 20% Commission</p>
+                            <p style="margin: 5px 0 0 0; font-weight: 700; color: var(--primary);">₹${p.commission}</p>
+                        </div>
+                        <div>
+                            <p style="margin: 0; color: #27ae60;">Net to Provider</p>
+                            <p style="margin: 5px 0 0 0; font-weight: 800; color: #27ae60;">₹${p.netSettlement}</p>
+                        </div>
+                    </div>
+                    <button class="btn-book" style="background: #27ae60; margin-top: 5px; width: 100%;" 
+                        onclick="settlePayout('${p.id}', ${p.netSettlement}, ${p.grossEarnings}, ${p.commission})">
+                        Approve and Settle ₹${p.netSettlement}
+                    </button>
+                </div>
+            `).join('');
+        }
+    }
+    initAdminCharts();
+    renderAdminRolesSummary();
+    detectFraudulentUsers();
+}
+
+function renderAdminRolesSummary() {
+    const summary = document.getElementById('admin-roles-summary');
+    if (!summary) return;
+    const providers = [...AppState.doctors, ...AppState.labs];
+    const admins = providers.filter(p => p.adminRole);
+
+    // SMART RANKING: Rank by "Performance Score"
+    // Formula: Score = (Approved ? 50 : 0) + (Rating * 10) - (Cancellations * 5)
+    const rankedProviders = providers.map(p => {
+        const cancellations = AppState.appointments.filter(a => a.targetId === p.id && a.status === 'rejected').length;
+        const score = (p.approved ? 50 : 0) + (parseFloat(p.rating || 4.5) * 10) - (cancellations * 5);
+        return { ...p, score };
+    }).sort((a, b) => b.score - a.score);
+
+    if (admins.length === 0) {
+        summary.innerHTML = `<p style="color:var(--text-muted);">No sub-admins assigned yet.</p>`;
     } else {
-        payoutList.innerHTML = payouts.map(p => `
-            <div class="tile-item" style="flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px;">
-                <div style="display: flex; justify-content: space-between; width: 100%; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-                    <h4 style="margin: 0;">${p.name}</h4>
-                    <span style="font-size: 0.8rem; color: var(--text-muted);">ID: ${p.id}</span>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; width: 100%; font-size: 0.9rem;">
-                    <div>
-                        <p style="margin: 0; color: var(--text-muted);">Patient Paid</p>
-                        <p style="margin: 5px 0 0 0; font-weight: 700;">₹${p.grossEarnings}</p>
-                    </div>
-                    <div>
-                        <p style="margin: 0; color: var(--primary);">- 20% Commission</p>
-                        <p style="margin: 5px 0 0 0; font-weight: 700; color: var(--primary);">₹${p.commission}</p>
-                    </div>
-                    <div>
-                        <p style="margin: 0; color: #27ae60;">Net to Provider</p>
-                        <p style="margin: 5px 0 0 0; font-weight: 800; color: #27ae60;">₹${p.netSettlement}</p>
-                    </div>
-                </div>
-                <button class="btn-book" style="background: #27ae60; margin-top: 5px; width: 100%;" 
-                    onclick="settlePayout('${p.id}', ${p.netSettlement}, ${p.grossEarnings}, ${p.commission})">
-                    Approve and Settle ₹${p.netSettlement}
-                </button>
+        summary.innerHTML = admins.map(a => `
+            <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;">
+                <span>${a.name}</span>
+                <span class="tile-badge status-approved" style="font-size:0.6rem;">${a.adminRole.toUpperCase()}</span>
             </div>
         `).join('');
     }
-    initAdminCharts();
+
+    // Top Performer Highlight (In console or UI if needed)
+    if (rankedProviders[0]) {
+        console.log(`[ADMIN KPI] Top Ranked Provider: ${rankedProviders[0].name} (Score: ${rankedProviders[0].score})`);
+    }
 }
+
 
 function initAdminCharts() {
     const ctx = document.getElementById('revenueChart');
-    if (!ctx) return;
-    if (window.myChart) window.myChart.destroy();
-    window.myChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-            datasets: [{
-                label: 'Monthly Revenue (₹)',
-                data: [12000, 19000, 3000, 5000, 2000, 30000, 45000],
-                borderColor: '#E23744',
-                tension: 0.4,
-                fill: true,
-                backgroundColor: 'rgba(226, 55, 68, 0.1)'
-            }]
-        },
-        options: { responsive: true, plugins: { legend: { display: false } } }
-    });
+    if (ctx) {
+        if (window.myChart) window.myChart.destroy();
+        window.myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Monthly Revenue (₹)',
+                    data: [12000, 19000, 3000, 5000, 2000, 30000, 45000],
+                    borderColor: '#E23744',
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: 'rgba(226, 55, 68, 0.1)'
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } } }
+        });
+    }
+
+    const sctx = document.getElementById('specialtyChart');
+    if (sctx) {
+        if (window.specChart) window.specChart.destroy();
+        window.specChart = new Chart(sctx, {
+            type: 'polarArea',
+            data: {
+                labels: ['Cardiology', 'Pediatrics', 'Blood Lab', 'MRI'],
+                datasets: [{
+                    data: [45, 25, 60, 15],
+                    backgroundColor: ['rgba(226, 55, 68,0.7)', 'rgba(52,152,219,0.7)', 'rgba(46,204,113,0.7)', 'rgba(155,89,182,0.7)']
+                }]
+            }
+        });
+    }
+
+    const pctx = document.getElementById('peakHoursChart');
+    if (pctx) {
+        if (window.peakChart) window.peakChart.destroy();
+        window.peakChart = new Chart(pctx, {
+            type: 'bar',
+            data: {
+                labels: ['9AM', '12PM', '3PM', '6PM', '9PM'],
+                datasets: [{
+                    label: 'Bookings',
+                    data: [12, 45, 18, 55, 10],
+                    backgroundColor: '#E23744'
+                }]
+            },
+            options: { plugins: { legend: { display: false } } }
+        });
+    }
 }
+
+
 
 
 // Updated settlePayout to show the breakdown in the toast
@@ -1423,29 +2174,167 @@ window.settlePayout = function (id, netAmt, grossAmt, commAmt) {
     // In a real app, you would update the database here.
 };
 
-// New function to render user management tab
+// --- Admin Actions Extended ---
+window.viewProviderDetails = function (id, collection) {
+    const p = (collection === 'doctors' ? AppState.doctors : AppState.labs).find(item => item.id === id);
+    if (!p) return;
+
+    DOM.modalBody.innerHTML = `
+        <div class="verification-details" style="text-align: left;">
+            <div style="grid-column: 1/-1; display:flex; align-items:center; gap:20px; margin-bottom:20px; border-bottom:2px solid #eee; padding-bottom:15px;">
+                <img src="${p.image || 'https://via.placeholder.com/80'}" style="width:80px; height:80px; border-radius:50%; object-fit:cover;">
+                <div>
+                    <h2 style="margin:0;">${p.name}</h2>
+                    <p style="color:var(--text-muted); margin:0;">${p.specialty || 'Health Provider'} • ID: ${p.id}</p>
+                </div>
+            </div>
+
+            <div class="detail-group">
+                <h4><i class="fas fa-info-circle"></i> Basic & Prof. Info</h4>
+                <p><strong>Mobile:</strong> OTP Verified</p>
+                <p><strong>Gender:</strong> ${p.gender || 'Not specified'}</p>
+                <p><strong>Reg. Number:</strong> <span style="color:var(--primary); font-weight:700;">${p.regNum || p.labRegNum || 'N/A'}</span></p>
+                <p><strong>Council/Authority:</strong> ${p.council || 'N/A'}</p>
+                <p><strong>Qualification:</strong> ${p.qualification || 'N/A'}</p>
+                <p><strong>Experience:</strong> ${p.experience || '0'} Years</p>
+            </div>
+
+            <div class="detail-group">
+                <h4><i class="fas fa-map-location-dot"></i> Clinic/Center Details</h4>
+                <p><strong>Name:</strong> ${p.clinicName || 'N/A'}</p>
+                <p><strong>Address:</strong> ${p.clinicAddress || 'N/A'}</p>
+                <div class="map-placeholder" style="height:120px;">
+                    <i class="fas fa-map-pin" style="color:var(--primary);"></i> ${p.clinicAddress ? 'Located in Map' : 'No Location Data'}
+                </div>
+                <p><strong>Fees:</strong> ₹${p.price || '500'}</p>
+            </div>
+
+            <div class="detail-group" style="grid-column: 1/-1;">
+                <h4><i class="fas fa-file-shield"></i> Verified Documents</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    ${Object.entries(p.docs || {}).map(([key, url]) => `
+                        <div class="doc-preview-item">
+                            <i class="fas fa-file-pdf"></i>
+                            <span style="flex:1;">${key.toUpperCase()}</span>
+                            <a href="${url}" target="_blank" style="color:var(--primary); font-size:0.8rem;">Preview</a>
+                        </div>
+                    `).join('') || '<p>No documents uploaded.</p>'}
+                </div>
+            </div>
+
+            <div class="detail-group" style="grid-column: 1/-1; background:#fff8f8; padding:15px; border-radius:12px;">
+                <h4><i class="fas fa-gavel"></i> Admin Decision</h4>
+                <div class="input-group">
+                    <label>Internal Remarks / Rejection Reason</label>
+                    <textarea id="admin-remarks" placeholder="Add notes here..." style="width:100%; height:60px;"></textarea>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                    <div>
+                        <label style="font-size:0.8rem;">Platform Commission (%)</label>
+                        <input type="number" id="admin-comm" value="20" style="width:100%; padding:8px;">
+                    </div>
+                    <div style="display:flex; align-items:flex-end; gap:10px;">
+                         <button class="btn-signup" style="background:#e74c3c; flex:1;" onclick="rejectProvider('${p.id}', '${collection}')">Reject</button>
+                         <button class="btn-signup" style="background:#2ecc71; flex:1;" onclick="approveProvider('${p.id}', '${collection}')">Approve</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    DOM.modal.classList.remove('hidden');
+};
+
+window.approveProvider = async function (id, collection) {
+    const remarks = document.getElementById('admin-remarks')?.value || "Approved by Admin";
+    const comm = document.getElementById('admin-comm')?.value || 20;
+
+    showToast("Finalizing Approval...");
+    try {
+        await db.collection(collection).doc(id).update({
+            approved: true,
+            onboardingStatus: 'approved',
+            adminRemarks: remarks,
+            commissionRate: parseInt(comm),
+            approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await db.collection('users').doc(id).update({
+            approved: true,
+            onboardingStatus: 'approved'
+        });
+
+        showToast("Provider Approved & Live!", "success");
+        DOM.modal.classList.add('hidden');
+        renderAdminDashboard();
+    } catch (err) {
+        showToast("Approval failed", "error");
+    }
+};
+
+window.rejectProvider = async function (id, collection) {
+    const remarks = document.getElementById('admin-remarks').value;
+    if (!remarks) return showToast("Please provide a reason for rejection", "warning");
+
+    showToast("Rejecting Application...");
+    try {
+        await db.collection(collection).doc(id).update({
+            approved: false,
+            onboardingStatus: 'rejected',
+            adminRemarks: remarks,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await db.collection('users').doc(id).update({
+            onboardingStatus: 'rejected'
+        });
+
+        showToast("Application Rejected with Remarks", "info");
+        DOM.modal.classList.add('hidden');
+        renderAdminDashboard();
+    } catch (err) {
+        showToast("Rejection failed", "error");
+    }
+};
 function renderAdminUsers() {
     const usersList = document.getElementById('admin-users-list');
     if (!usersList) return;
-    const allUsers = [...AppState.doctors, ...AppState.labs];
+
+    const allUsers = [
+        ...AppState.doctors.map(d => ({ ...d, collection: 'doctors' })),
+        ...AppState.labs.map(l => ({ ...l, collection: 'labs' }))
+    ];
     if (allUsers.length === 0) {
         usersList.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No users found.</p>`;
         return;
     }
-    usersList.innerHTML = allUsers.map(u => `
-        <div class="tile-item">
-            <div class="tile-info">
-                <h4>${u.name}</h4>
-                <p>${u.approved ? 'Approved' : 'Pending'} – ${u.email || 'No email'}</p>
+    usersList.innerHTML = allUsers.map(u => {
+        const userObj = AppState.users.find(usr => usr.id === u.id);
+        const email = u.email || userObj?.email || 'No email';
+        return `
+            <div class="tile-item">
+                <div class="tile-info">
+                    <h4>${u.name}</h4>
+                    <p>${u.approved ? 'Approved' : 'Pending'} – ${email}</p>
+                    <div style="margin-top:5px; display:flex; gap:5px;">
+                        <select onchange="updateUserRole('${u.id}', this.value)" style="font-size:0.7rem; padding:2px; border-radius:5px;">
+                            <option value="provider" ${!u.adminRole ? 'selected' : ''}>Standard Provider</option>
+                            <option value="finance" ${u.adminRole === 'finance' ? 'selected' : ''}>Finance Admin</option>
+                            <option value="support" ${u.adminRole === 'support' ? 'selected' : ''}>Support Admin</option>
+                        </select>
+                    </div>
+                </div>
+                ${u.approved ? '<span style="color:#2ecc71; font-weight:700;"><i class="fas fa-check-circle"></i> Approved</span>' : `<button class="btn-book" onclick="approveProvider('${u.id}', '${u.collection}')">Approve</button>`}
             </div>
-            ${u.approved ? '' : `<button class="btn-book" onclick="approveProvider('${u.id}', '${u.image?.includes('lab') ? 'labs' : 'doctors'}')">Approve</button>`}
-        </div>
-    `).join('');
+        `}).join('');
 }
 
-window.settlePayout = function (id, amount) {
-    showToast(`Payout of ₹${amount} settled successfully!`);
+window.updateUserRole = function (id, role) {
+    showToast(`Permission Level Changed to ${role.toUpperCase()} Admin for user!`);
+    // Logic to sync with Firebase if needed
 };
+
+
+
 
 window.showAdminTab = function (tab, event) {
     const targetId = `admin-${tab}-tab`;
@@ -1465,8 +2354,20 @@ window.showAdminTab = function (tab, event) {
 
 window.updateAppStatus = async function (appId, status) {
     try {
-        await db.collection('appointments').doc(appId).update({ status });
+        const updates = { status };
+        if (status === 'rejected') {
+            showToast("Test Refund Initiated...");
+            updates.paymentStatus = 'Refunded (Test Mode)';
+            updates.payoutStatus = 'Refunded';
+        }
+
+        await db.collection('appointments').doc(appId).update(updates);
         showToast(`Appointment ${status}`);
+
+        // Notify simulation
+        const app = AppState.appointments.find(a => a.id === appId);
+        if (app) simulateNotification('whatsapp', `Hi ${app.patientName}, your booking with ${app.targetName} has been ${status}.`);
+
         refreshActiveDashboard();
     } catch (err) {
         showToast("Update failed", "error");
@@ -1488,21 +2389,67 @@ function detectFraudulentUsers() {
 
     // Flag users with > 3 cancellations
     const fraudulent = Object.keys(userCancelCounts).filter(id => userCancelCounts[id] > 3);
+    const indicator = document.getElementById('fraud-indicator');
     if (fraudulent.length > 0) {
+        if (indicator) indicator.classList.remove('hidden');
         console.warn(`[FRAUD ALERT] Detected ${fraudulent.length} users with high cancellation rates.`);
-        // In real app, update UI or database
+    } else {
+        if (indicator) indicator.classList.add('hidden');
     }
 }
+
 
 window.saveAdminSettings = function () {
     const comm = document.getElementById('set-commission').value;
     const sla = document.getElementById('set-sla').value;
     const video = document.getElementById('set-video').checked;
 
-    // Logic to update global commission rate or show success
     showToast(`Configurations Updated! Commission: ${comm}%`, "success");
-    console.log(`[ADMIN CONFIG] Commission: ${comm}, SLA: ${sla}, Video: ${video}`);
 };
+
+window.clearAllUsersExceptAdmin = async function () {
+    const ADMIN_UID = 'DwaDCedzWzNC5Y0qLE1e6989bR23';
+    if (!confirm("CRITICAL WARNING: This will delete ALL doctors, labs, patients, and appointments from the database forever. Only the main Admin account will remain. Proceed?")) return;
+
+    showToast("Starting Factory Reset...", "warning");
+
+    try {
+        // 1. Clear Appointments
+        const apps = await db.collection('appointments').get();
+        const batch1 = db.batch();
+        apps.forEach(doc => batch1.delete(doc.ref));
+        await batch1.commit();
+
+        // 2. Clear Doctors
+        const docs = await db.collection('doctors').get();
+        const batch2 = db.batch();
+        docs.forEach(doc => batch2.delete(doc.ref));
+        await batch2.commit();
+
+        // 3. Clear Labs
+        const labs = await db.collection('labs').get();
+        const batch3 = db.batch();
+        labs.forEach(doc => batch3.delete(doc.ref));
+        await batch3.commit();
+
+        // 4. Clear Users (Except Admin)
+        const users = await db.collection('users').get();
+        const batch4 = db.batch();
+        users.forEach(doc => {
+            if (doc.id !== ADMIN_UID) {
+                batch4.delete(doc.ref);
+            }
+        });
+        await batch4.commit();
+
+        showToast("PLATFORM RESET SUCCESSFUL", "success");
+        setTimeout(() => location.reload(), 2000);
+    } catch (err) {
+        console.error("Reset Failed:", err);
+        showToast("Reset Failed Check Console", "error");
+    }
+};
+
 
 window.saveCMS = function () {
     const title = document.getElementById('cms-home-title').value;
@@ -1531,28 +2478,34 @@ function simulateNotification(type, message) {
     }
 }
 
-// Update processPayment to simulate WhatsApp alert
-window.processPayment = async function (itemId, type) {
-    if (!AppState.selectedSlot) return showToast("Please select a time slot first", "warning");
 
-    const btn = document.getElementById('confirm-booking-btn');
-    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Securing Payment...`;
-    btn.disabled = true;
-
-    // Simulate Payment Gateway Delay
-    setTimeout(async () => {
-        await confirmBooking(itemId, type);
-        simulateNotification('whatsapp', `Hi! Your appointment with ${type} is confirmed for ${AppState.selectedSlot}.`);
-    }, 1500);
-};
 
 // --- Utilities ---
 function refreshActiveDashboard() {
     if (!AppState.user) return;
+
+    // Update logged in profile if it was a doctor/lab whose data just synced
+    if (AppState.user.role === 'doctor' || AppState.user.role === 'lab') {
+        const sourceCol = AppState.user.role === 'doctor' ? AppState.doctors : AppState.labs;
+        const freshData = sourceCol.find(d => d.id === AppState.user.id);
+        if (freshData) {
+            AppState.user = { ...AppState.user, ...freshData };
+        }
+    }
+
     if (AppState.user.role === 'patient') refreshPatientHistory();
     if (AppState.user.role === 'doctor') renderDoctorDashboard();
     if (AppState.user.role === 'lab') renderLabDashboard();
-    if (AppState.user.role === 'admin') renderAdminDashboard();
+    if (AppState.user.role === 'admin') {
+        renderAdminDashboard();
+        detectFraudulentUsers();
+
+        // Refresh User Management if active
+        const usersTab = document.getElementById('admin-users-tab');
+        if (usersTab && !usersTab.classList.contains('hidden')) {
+            renderAdminUsers();
+        }
+    }
 }
 
 window.toggleAuth = function (type) {
@@ -1578,7 +2531,7 @@ window.showToast = function (msg, type = 'success') {
 function initSimulations() {
     // Activity Pulse
     const activities = [
-        "Rahul M. booked Cardiology", "Sarah K. booked Blood Test", "Dr. Vikram updated slots", "Amit P. joined HealthMate"
+        "System Monitor Active", "Encryption Layer Secure", "Platform Heartbeat Stable", "Admin Session Validated"
     ];
     setInterval(() => {
         const activity = activities[Math.floor(Math.random() * activities.length)];
@@ -1588,42 +2541,454 @@ function initSimulations() {
     }, 8000);
 }
 
-// --- Data Seeding (For Demo/Initial State) ---
-async function seedInitialData() {
+
+// --- Admin Oversight & Approvals ---
+window.approveProvider = async function (id, type) {
+    console.log(`[ADMIN] Approving ${type} with ID: ${id}`);
+    showToast(`Verifying credentials for ${type}...`);
     try {
-        console.log("Refreshing sample data images...");
-        const sampleDoctors = [
-            { id_search: "Vikram", name: "Dr. Vikram Malhotra", specialty: "Cardiology", language: "Hindi", address: "Andheri West, Mumbai", price: "800", rating: "4.8", image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=800&auto=format&fit=crop", approved: true },
-            { id_search: "Sarah", name: "Dr. Sarah Khan", specialty: "Pediatrics", language: "English", address: "Bandra, Mumbai", price: "600", rating: "4.9", image: "https://images.unsplash.com/photo-1559839734-2b71f1536783?q=80&w=800&auto=format&fit=crop", approved: true },
-            { id_search: "Amit", name: "Dr. Amit Patel", specialty: "Orthopedics", language: "Marathi", address: "Thane, Maharashtra", price: "700", rating: "4.7", image: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=800&auto=format&fit=crop", approved: true },
-            { id_search: "Priya", name: "Dr. Priya Sharma", specialty: "Gynaecology", language: "English, Hindi", address: "Colaba, Mumbai", price: "900", rating: "4.9", image: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=800&auto=format&fit=crop", approved: true }
-        ];
+        const ref = db.collection(type).doc(id);
+        const doc = await ref.get();
+        if (!doc.exists) {
+            console.error(`[ADMIN] Provider ${id} not found in ${type}`);
+            throw new Error("Provider document not found");
+        }
+        const data = doc.data();
+        console.log(`[ADMIN] Current provider status:`, data.approved);
 
-        for (const doc of sampleDoctors) {
-            const q = await db.collection('doctors').where('name', '==', doc.name).get();
-            if (q.empty) {
-                await db.collection('doctors').add(doc);
-            } else {
-                // Update existing to fix image
-                await q.docs[0].ref.update({ image: doc.image });
-            }
+        // Update Doctor/Lab entry
+        const isComplete = data.name && data.address && data.price && data.specialty;
+        const updateData = {
+            approved: true,
+            approvalMode: isComplete ? 'auto' : 'manual'
+        };
+        await ref.update(updateData);
+
+        // SYNC: Also update the main users collection so UI components looking at AppState.user are consistent
+        try {
+            await db.collection('users').doc(id).update({ approved: true });
+        } catch (uErr) {
+            console.log("Note: Main user doc not found or already has status");
         }
 
-        const sampleLabs = [
-            { name: "City Diagnostics", specialty: "Full Body Checkup", address: "Dadar, Mumbai", price: "1200", rating: "4.6", image: "https://images.unsplash.com/photo-1581594634722-e759247f446d?q=80&w=800&auto=format&fit=crop", approved: true },
-            { name: "Wellness PathLabs", specialty: "Blood Test", address: "Colaba, Mumbai", price: "450", rating: "4.5", image: "https://images.unsplash.com/photo-1516733725897-1aa390dc3fa0?q=80&w=800&auto=format&fit=crop", approved: true }
-        ];
-
-        for (const lab of sampleLabs) {
-            const q = await db.collection('labs').where('name', '==', lab.name).get();
-            if (q.empty) {
-                await db.collection('labs').add(lab);
-            } else {
-                await q.docs[0].ref.update({ image: lab.image });
-            }
-        }
+        showToast(`${data.name} Approved successfully!`, "success");
+        refreshActiveDashboard();
     } catch (err) {
-        console.warn("Seeding or image update failed:", err.message);
+        console.error("Approval Error:", err);
+        showToast("Approval failed: " + err.message, "error");
+    }
+};
+
+function renderLabTechnician() {
+    const list = document.getElementById('lab-technician-list');
+    if (!list) return;
+
+    // Simulate real-time tracking of technicians
+    const technicians = [
+        { name: "Rahul Sharma", zone: "Mumbai West", status: "On Route", progress: 65, icon: 'fa-motorcycle' },
+        { name: "Suresh Gupta", zone: "Thane Central", status: "Sample Collected", progress: 90, icon: 'fa-vial' },
+        { name: "Anita Rao", zone: "Navi Mumbai", status: "Idle", progress: 100, icon: 'fa-home' }
+    ];
+
+    list.innerHTML = technicians.map(t => `
+        <div class="tile-item" style="flex-direction:column; align-items:flex-start; gap:10px;">
+            <div style="display:flex; justify-content:space-between; width:100%;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:35px; height:35px; background:var(--primary-light); border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--primary);">
+                        <i class="fas ${t.icon}"></i>
+                    </div>
+                    <div>
+                        <h4 style="margin:0;">${t.name}</h4>
+                        <p style="font-size:0.7rem;">${t.zone}</p>
+                    </div>
+                </div>
+                <span class="tile-badge status-${t.status === 'Idle' ? 'approved' : 'pending'}">${t.status}</span>
+            </div>
+            <div style="width:100%; height:6px; background:#eee; border-radius:10px; overflow:hidden;">
+                <div style="width:${t.progress}%; height:100%; background:var(--primary); transition: width 1s ease-in-out;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; width:100%; font-size:0.75rem; color:var(--text-muted);">
+                <span>Collection Progress</span>
+                <span>${t.progress}%</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+
+// --- Patient Navigator & Tab Logic ---
+window.showPatientSection = function (section, event) {
+    // Hide all tabs
+    document.querySelectorAll('.patient-tab, .container').forEach(el => {
+        if (el.id?.startsWith('patient-') && el.id?.endsWith('-tab')) el.classList.add('hidden');
+    });
+
+    // Show specific tab
+    const target = document.getElementById(`patient-${section}-tab`);
+    if (target) {
+        target.classList.remove('hidden');
+        if (section === 'home') setCategory('doctors');
+    }
+
+    if (section === 'lab-tests') renderLabTests();
+
+    // Update Nav UI
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+        // Match by text or click event
+        if (event && event.currentTarget === item) item.classList.add('active');
+        else if (item.innerText.toLowerCase().includes(section)) item.classList.add('active');
+    });
+
+    window.scrollTo(0, 0);
+};
+
+window.showPatientTab = function (tab) {
+    // Shared Navigator for sub-sections
+    document.querySelectorAll('.patient-tab, .container').forEach(el => {
+        if (el.id?.startsWith('patient-') && el.id?.endsWith('-tab')) el.classList.add('hidden');
+    });
+
+    const target = document.getElementById(`patient-${tab}-tab`);
+    if (target) {
+        target.classList.remove('hidden');
+        window.scrollTo(0, 0);
+    }
+
+    if (tab === 'pharmacy') renderPharmacy();
+    if (tab === 'wallet') renderWallet();
+    if (tab === 'home') showPatientSection('home');
+    if (tab === 'history') refreshPatientHistory();
+    if (tab === 'reports') refreshPatientRecords();
+};
+
+// --- Pharmacy Feature ---
+window.renderPharmacy = function () {
+    const grid = document.getElementById('pharmacy-grid');
+    if (!grid) return;
+
+    const meds = [
+        { name: "Paracetamol 500mg", brand: "Dolo", price: 30, image: "💊" },
+        { name: "Vitamin C Tablets", brand: "Limcee", price: 45, image: "🍊" },
+        { name: "First Aid Kit", brand: "Savlon", price: 299, image: "🎒" },
+        { name: "Hand Sanitizer", brand: "Dettol", price: 80, image: "🧴" },
+        { name: "Face Masks (N95)", brand: "Venus", price: 150, image: "😷" },
+        { name: "BP Monitor", brand: "Omron", price: 2499, image: "⌚" }
+    ];
+
+    grid.innerHTML = meds.map(m => `
+        <div class="service-card" style="text-align:left; padding:15px; border:1px solid #eee;">
+            <div style="font-size:3rem; margin-bottom:10px;">${m.image}</div>
+            <h4 style="margin:0;">${m.name}</h4>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin:5px 0;">${m.brand}</p>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
+                <span style="font-weight:900; color:var(--primary);">₹${m.price}</span>
+                <button class="btn-small" onclick="addToCart('${m.name}', ${m.price})" style="padding:5px 12px;"><i class="fas fa-plus"></i></button>
+            </div>
+        </div>
+    `).join('');
+};
+
+window.addToCart = function (name, price) {
+    if (!AppState.cart) AppState.cart = [];
+    AppState.cart.push({ name, price });
+    const countEl = document.getElementById('cart-count');
+    if (countEl) countEl.innerText = AppState.cart.length;
+    showToast(`${name} added to cart!`);
+};
+
+window.openCart = function () {
+    if (!AppState.cart || AppState.cart.length === 0) return alert("Your cart is empty!");
+    const total = AppState.cart.reduce((sum, item) => sum + item.price, 0);
+    DOM.modalBody.innerHTML = `
+        <h3>Your Pharmacy Cart</h3>
+        <div class="tile-list" style="margin:20px 0;">
+            ${AppState.cart.map((item, idx) => `
+                <div class="tile-item">
+                    <div class="tile-info"><h4>${item.name}</h4><p>Qty: 1</p></div>
+                    <span style="font-weight:700;">₹${item.price}</span>
+                </div>
+            `).join('')}
+        </div>
+        <div style="display:flex; justify-content:space-between; padding:20px 0; border-top:2px dashed #eee;">
+            <h4 style="margin:0;">Grand Total:</h4>
+            <h3 style="margin:0; color:var(--primary);">₹${total}</h3>
+        </div>
+        <button class="btn-signup" style="width:100%; margin-top:20px;" onclick="checkoutPharmacy()">Place Order & Pay (₹${total})</button>
+    `;
+    DOM.modal.classList.remove('hidden');
+};
+
+window.checkoutPharmacy = function () {
+    showToast("Order Placed Successfully! Delivery expected in 2 hours.", "success");
+    AppState.cart = [];
+    document.getElementById('cart-count').innerText = 0;
+    DOM.modal.classList.add('hidden');
+};
+
+// --- Wallet Feature ---
+window.renderWallet = function () {
+    const list = document.getElementById('wallet-transactions-list');
+    if (!list) return;
+
+    const transactions = [
+        { type: 'Doctor Visit', provider: 'Dr. Sameer', amount: -600, date: '02 Mar' },
+        { type: 'Refund', provider: 'Lab Test Cancelled', amount: 450, date: '28 Feb' },
+        { type: 'Pharmacy', provider: 'HealthMate Pharmacy', amount: -120, date: '25 Feb' }
+    ];
+
+    list.innerHTML = transactions.map(t => `
+        <div class="tile-item">
+            <div style="width:40px; height:40px; background:${t.amount > 0 ? '#e8f5e9' : '#fff3cd'}; color:${t.amount > 0 ? '#2ecc71' : '#f39c12'}; border-radius:50%; display:flex; align-items:center; justify-content:center;">
+                <i class="fas ${t.amount > 0 ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+            </div>
+            <div class="tile-info">
+                <h4>${t.type}</h4>
+                <p>${t.provider} • ${t.date}</p>
+            </div>
+            <span style="font-weight:900; color:${t.amount > 0 ? '#2ecc71' : '#333'};">${t.amount > 0 ? '+' : ''}₹${Math.abs(t.amount)}</span>
+        </div>
+    `).join('');
+};
+
+// --- Lab Test Catalog ---
+window.renderLabTests = function () {
+    const grid = document.getElementById('provider-grid');
+    if (!grid) return;
+
+    DOM.sectionTitle.innerText = "Popular Lab Tests";
+    const tests = [
+        { name: "CBC (Complete Blood Count)", price: 299, desc: "Includes 24 parameters", labs: "City Labs, Apollo" },
+        { name: "Lipid Profile", price: 599, desc: "Cholesterol & Heart Health", labs: "Metropolis, Dr. Lal" },
+        { name: "Thyroid Profile (T3, T4, TSH)", price: 399, desc: "Hormonal screening", labs: "Thyrocare" },
+        { name: "Diabetes Screening", price: 499, desc: "HbA1c + Fasting Sugar", labs: "All Labs" }
+    ];
+
+    grid.innerHTML = tests.map(t => `
+        <div class="doctor-card" onclick="setCategory('labs')">
+            <div class="card-img" style="background:var(--primary-light); display:flex; align-items:center; justify-content:center; font-size:3rem; color:var(--primary);">
+                <i class="fas fa-flask"></i>
+            </div>
+            <div class="card-content">
+                <h3 class="card-title">${t.name}</h3>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;">${t.desc}</p>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:900; color:var(--primary);">₹${t.price}</span>
+                    <button class="btn-book" style="padding:5px 15px;">Search Labs</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+};
+
+// --- Patient Data Fetching & Rendering ---
+window.refreshPatientHistory = function () {
+    if (!AppState.user) return;
+    const history = AppState.appointments.filter(a => a.patientId === AppState.user.id)
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    renderPatientHistory(history);
+};
+
+window.renderPatientHistory = function (history) {
+    const list = document.getElementById('patient-history-list');
+    if (!list) return;
+
+    if (history.length === 0) {
+        list.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">No booking history found.</p>';
+        return;
+    }
+
+    list.innerHTML = history.map(app => `
+        <div class="tile-item">
+            <div style="width:45px; height:45px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">
+                <i class="fas ${app.type === 'doctors' ? 'fa-user-md' : 'fa-microscope'}"></i>
+            </div>
+            <div class="tile-info">
+                <h4>${app.targetName}</h4>
+                <p>${app.date} • ${app.time} • Token: #${app.tokenNumber}</p>
+                <p style="font-size:0.7rem; color:var(--text-muted);">Status: <span class="tile-badge status-${app.status}">${app.status.toUpperCase()}</span> | Payment: ${app.paymentStatus}</p>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:5px;">
+                <button class="btn-small" onclick="downloadInvoice('${app.id}')"><i class="fas fa-file-invoice"></i> Bill</button>
+                ${app.type === 'labs' && app.status === 'completed' ? `<button class="btn-small" style="background:var(--secondary);" onclick="viewReport('${app.id}')"><i class="fas fa-file-pdf"></i> Report</button>` : ''}
+            </div>
+        </div>
+    `).join('');
+};
+
+window.refreshPatientRecords = async function () {
+    if (!AppState.user) return;
+    try {
+        const snap = await db.collection('medical_records')
+            .where('patientId', '==', AppState.user.id)
+            .get();
+        const records = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderPatientReports(records);
+    } catch (err) {
+        console.error("Fetch Records Error:", err);
+    }
+};
+
+window.renderPatientReports = function (records) {
+    const list = document.getElementById('patient-reports-list');
+    if (!list) return;
+
+    if (records.length === 0) {
+        list.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">No medical records found.</p>';
+        return;
+    }
+
+    list.innerHTML = records.map(rec => `
+        <div class="tile-item">
+            <div style="width:45px; height:45px; background:#e8f5e9; color:#2ecc71; border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">
+                <i class="fas fa-file-medical"></i>
+            </div>
+            <div class="tile-info">
+                <h4>${rec.name}</h4>
+                <p>${rec.date} • ${rec.type.toUpperCase()}</p>
+            </div>
+            <button class="btn-small" onclick="window.open('${rec.url}', '_blank')"><i class="fas fa-eye"></i> View</button>
+        </div>
+    `).join('');
+};
+
+window.downloadInvoice = function (appId) {
+    const app = AppState.appointments.find(a => a.id === appId);
+    if (!app) return;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.setFontSize(22);
+    doc.text("HealthMate Invoice", 20, 20);
+    doc.setFontSize(12);
+    doc.text(`Invoice ID: HM-INV-${appId.substring(0, 8).toUpperCase()}`, 20, 30);
+    doc.text(`Patient: ${app.patientName}`, 20, 40);
+    doc.text(`Provider: ${app.targetName}`, 20, 50);
+    doc.text(`Date: ${app.date}`, 20, 60);
+    doc.text(`Price: ₹${app.price}`, 20, 70);
+    doc.text("-----------------------------------", 20, 80);
+    doc.text(`Total Amount: ₹${app.price}`, 20, 90);
+    doc.text("Status: Paid (Test Mode)", 20, 100);
+
+    doc.save(`Invoice_${app.targetName}.pdf`);
+    showToast("Invoice downloaded!");
+};
+
+window.viewReport = function (appId) {
+    showToast("Processing high-security report viewer...");
+    // Future: Fetch actual report blob
+    showToast("Viewing report for booking: " + appId, "info");
+};
+
+// --- Auth Simulations ---
+window.handleGoogleLogin = function () {
+    showToast("Opening Google Sign-In...", "info");
+    setTimeout(() => {
+        showToast("Access Granted. Welcome back, Patient!", "success");
+        // Simulated Login as Patient
+        AppState.user = { id: 'test_google_1', name: 'Ayush Sharma', email: 'ayush@example.com', role: 'patient', image: 'A' };
+        applyUserSession();
+        DOM.authOverlay.classList.add('hidden');
+    }, 1500);
+};
+
+window.simulateOTP = function () {
+    const phone = prompt("Enter mobile number:");
+    if (!phone) return;
+    showToast("OTP sent to " + phone);
+    const otp = prompt("Enter 4-digit OTP (Try 1234):");
+    if (otp === "1234") {
+        showToast("Login Successful!", "success");
+        AppState.user = { id: 'test_otp_2', name: 'Guest Patient', email: 'guest@example.com', role: 'patient', phone: phone };
+        applyUserSession();
+        DOM.authOverlay.classList.add('hidden');
+    } else {
+        showToast("Invalid OTP", "error");
+    }
+};
+
+window.savePatientProfile = async function () {
+    if (!AppState.user) return;
+
+    showToast("Saving changes...");
+    const name = document.getElementById('edit-name').value;
+    const dob = document.getElementById('edit-dob').value;
+    const blood = document.getElementById('edit-blood-group').value;
+    const phone = document.getElementById('edit-phone').value;
+    const address = document.getElementById('edit-address').value;
+    const emergency = document.getElementById('edit-emergency').value;
+
+    const photoInput = document.getElementById('patient-photo-input');
+    let photoUrl = AppState.user.image;
+
+    if (photoInput && photoInput.files[0]) {
+        photoUrl = await uploadFile(photoInput.files[0], `profile/${AppState.user.id}/photo`);
+    }
+
+    const data = {
+        name, dob, blood, phone, address, emergency,
+        image: photoUrl,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+        await db.collection('users').doc(AppState.user.id).update(data);
+        AppState.user = { ...AppState.user, ...data };
+        showToast("Profile updated successfully!", "success");
+        applyUserSession();
+    } catch (err) {
+        showToast("Save failed: " + err.message, "error");
+    }
+};
+
+window.showProfileSub = function (sub, event) {
+    document.querySelectorAll('.profile-sub-section').forEach(s => s.classList.add('hidden'));
+    const target = document.getElementById(`profile-${sub}`);
+    if (target) target.classList.remove('hidden');
+
+    document.querySelectorAll('.profile-menu .menu-item').forEach(m => m.classList.remove('active'));
+    if (event) event.currentTarget.classList.add('active');
+};
+
+// --- Sidebar Helper Functions ---
+window.toggleSidebar = () => {
+    const sidebar = document.getElementById('app-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) sidebar.classList.toggle('active');
+    if (overlay) overlay.classList.toggle('active');
+};
+
+window.handleSidebarAction = (action) => {
+    toggleSidebar();
+    showToast(`Accessing ${action}...`);
+    // Specific logic per action can go here
+};
+
+window.handleLogout = () => {
+    toggleSidebar();
+    auth.signOut().then(() => showToast("Logged out successfully"));
+};
+
+function updateSidebarUI() {
+    const nameEl = document.getElementById('sidebar-user-name');
+    const idEl = document.getElementById('sidebar-user-id');
+    const photoEl = document.getElementById('sidebar-user-photo');
+
+    if (!nameEl || !idEl || !photoEl) return;
+
+    if (AppState.user) {
+        nameEl.innerText = (AppState.user.name || "HEALTH USER").toUpperCase();
+        idEl.innerText = `ID: HM-${AppState.user.id.slice(0, 6).toUpperCase()}`;
+        if (AppState.user.image) {
+            photoEl.src = AppState.user.image;
+        } else {
+            photoEl.src = "https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=200&q=80";
+        }
+    } else {
+        nameEl.innerText = "GUEST USER";
+        idEl.innerText = "ID: HM-000000";
+        photoEl.src = "https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=200&q=80";
     }
 }
 

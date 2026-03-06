@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>HealthMate | Digital Clinic & Lab Assistant</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css?v=2.0.8">
@@ -19,6 +19,21 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <!-- Mobile App (PWA) Meta Tags -->
+    <meta name="theme-color" content="#E23744">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="HealthMate">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2966/2966327.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-touch-fullscreen" content="yes">
+    <meta name="format-detection" content="telephone=no">
+
+
+
+
 
 
     <script>
@@ -47,106 +62,225 @@
 </head>
 
 <body>
+    <!-- Premium Sidebar / Drawer Section -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <aside class="app-sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-photo">
+                <img id="sidebar-user-photo"
+                    src="https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=200&q=80"
+                    alt="Profile">
+            </div>
+            <div class="sidebar-user-info">
+                <h2 id="sidebar-user-name">GUEST USER</h2>
+                <p id="sidebar-user-id">ID: HEALTH-0000</p>
+            </div>
+        </div>
+
+        <nav class="sidebar-menu">
+            <a href="javascript:void(0)" class="menu-item" onclick="handleSidebarAction('about')">
+                <i class="fas fa-info-circle"></i> <span>About HealthMate</span>
+            </a>
+            <a href="javascript:void(0)" class="menu-item" onclick="handleSidebarAction('devices')">
+                <i class="fas fa-laptop-medical"></i> <span>Active Devices</span>
+            </a>
+            <a href="javascript:void(0)" class="menu-item" onclick="handleSidebarAction('password')">
+                <i class="fas fa-key"></i> <span>Reset Password</span>
+            </a>
+            <a href="javascript:void(0)" class="menu-item" onclick="handleSidebarAction('help')">
+                <i class="fas fa-headset"></i> <span>Help Desk</span>
+            </a>
+
+            <div class="sidebar-divider"></div>
+
+            <a href="javascript:void(0)" class="menu-item logout-item" onclick="handleLogout()">
+                <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+            </a>
+        </nav>
+    </aside>
+
     <header class="header">
         <nav class="container">
-            <div class="logo" onclick="window.location.reload()" style="display: flex; align-items: center; gap: 10px;">
-                <i class="fas fa-heart-pulse logo-icon" style="color: var(--primary); font-size: 1.8rem;"></i>
-                <span class="logo-text" style="font-weight: 800; font-size: 1.6rem;">HealthMate</span>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button class="sidebar-btn" id="sidebar-toggle-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="logo" onclick="window.location.reload()"
+                    style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-heart-pulse logo-icon" style="color: var(--primary); font-size: 1.8rem;"></i>
+                    <span class="logo-text" style="font-weight: 800; font-size: 1.6rem;">Health<span>Mate</span></span>
+                </div>
             </div>
 
             <div class="user-actions">
                 <button class="theme-switch" id="theme-toggle" title="Toggle Dark Mode">
                     <i class="fas fa-moon"></i>
                 </button>
-                <select id="lang-switch" class="filter-select"
-                    style="padding: 5px 10px; font-size: 0.8rem; border-radius: 20px;">
-                    <option value="en">English</option>
-                    <option value="te">Telugu</option>
-                    <option value="hi">Hindi</option>
-                </select>
                 <div class="user-profile hidden" id="user-info">
-                    <div class="patient-nav hidden" id="patient-secondary-nav">
+                    <div class="patient-nav desktop-only" id="patient-secondary-nav"
+                        style="display:flex; gap:20px; margin-right:20px;">
                         <a href="javascript:void(0)" onclick="showPatientSection('home')">Home</a>
-                        <a href="javascript:void(0)" onclick="showPatientSection('history')">Bookings</a>
-                        <a href="javascript:void(0)" onclick="showPatientSection('records')">Records</a>
-                        <a href="javascript:void(0)" onclick="showPatientSection('reports')">Reports</a>
+                        <a href="javascript:void(0)" onclick="showPatientTab('pharmacy')">Pharmacy</a>
+                        <a href="javascript:void(0)" onclick="showPatientTab('wallet')">Wallet</a>
                     </div>
                     <span id="current-user-name" onclick="showPatientSection('profile', event)"
                         style="cursor:pointer">Welcome, User</span>
                     <span class="role-badge" id="current-user-role">Patient</span>
                 </div>
-                <button class="btn-signup" id="auth-main-btn">Login / Sign Up</button>
+                <button class="btn-signup" id="auth-main-btn">Login</button>
             </div>
         </nav>
     </header>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav" id="mobile-nav">
+        <div class="nav-item active" onclick="showPatientSection('home')">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+            <div class="active-dot"></div>
+        </div>
+        <div class="nav-item" onclick="showPatientSection('history')">
+            <i class="fas fa-calendar-check"></i>
+            <span>Bookings</span>
+            <div class="active-dot"></div>
+        </div>
+        <div class="nav-item" onclick="showPatientSection('records')">
+            <i class="fas fa-folder-open"></i>
+            <span>Records</span>
+            <div class="active-dot"></div>
+        </div>
+        <div class="nav-item" onclick="showPatientSection('profile')">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+            <div class="active-dot"></div>
+        </div>
+    </nav>
 
     <main id="main-content">
         <!-- Role: PATIENT / GUEST - Landing Section -->
         <section id="patient-view" class="role-section">
             <!-- Tab: Home (Hero + Categories + Listings) -->
             <div id="patient-home-tab" class="patient-tab">
-                <!-- Zomato Style Hero & Search -->
-                <section class="hero-section"
-                    style="padding: 60px 0; background: var(--white); border-bottom: 1px solid #eee;">
-                    <div class="container">
-                        <div class="search-container"
-                            style="max-width: 900px; margin: 0 auto; display: flex; box-shadow: 0 15px 35px rgba(0,0,0,0.1); border-radius: 10px; overflow: hidden; background: white;">
-                            <div class="search-box"
-                                style="flex: 1; display: flex; align-items: center; padding: 15px 25px; border-right: 1px solid #eee;">
-                                <i class="fas fa-location-dot" style="color: var(--primary); margin-right: 12px;"></i>
-                                <input type="text" placeholder="Mumbai" id="hero-location-input"
-                                    style="border: none; outline: none; width: 100%; font-size: 1rem; font-weight: 500;">
-                            </div>
-                            <div class="search-box main-search"
-                                style="flex: 2; display: flex; align-items: center; padding: 15px 25px;">
-                                <i class="fas fa-magnifying-glass" style="color: #999; margin-right: 12px;"></i>
-                                <input type="text" placeholder="Search doctors, clinics, hospitals, etc."
-                                    id="hero-search-input"
-                                    style="border: none; outline: none; width: 100%; font-size: 1rem;">
-                            </div>
+                <!-- Redesigned Home Dashboard -->
+                <section class="dashboard-header container" style="padding: 30px 0 20px;">
+                    <div class="search-bar-wrapper"
+                        style="display: flex; align-items: center; background: #fff; border: 1.5px solid #eee; border-radius: 15px; padding: 5px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                        <div class="location-btn" onclick="simulateGPS()"
+                            style="display: flex; align-items: center; gap: 8px; padding-right: 15px; border-right: 1.5px solid #eee; cursor: pointer; color: var(--primary);">
+                            <i class="fas fa-location-dot"></i>
+                            <span id="dashboard-location-text"
+                                style="font-weight: 600; color: var(--text-main);">Mumbai</span>
+                        </div>
+                        <div class="search-input-box"
+                            style="flex: 1; display: flex; align-items: center; gap: 12px; padding-left: 15px;">
+                            <i class="fas fa-magnifying-glass" style="color: #999;"></i>
+                            <input type="text" placeholder="Search doctors, labs, medicines…"
+                                id="dashboard-search-input"
+                                style="border: none; outline: none; width: 100%; height: 50px; font-size: 1rem; font-weight: 500;">
                         </div>
                     </div>
                 </section>
 
-                <!-- Zomato Style Service Cards -->
-                <div class="service-grid"
-                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px;">
-                    <div class="service-card" onclick="setCategory('doctors')"
-                        style="background: white; padding: 25px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center; cursor: pointer; transition: transform 0.2s;">
-                        <div
-                            style="width: 70px; height: 70px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; color: var(--primary); font-size: 1.5rem;">
-                            <i class="fas fa-user-md"></i>
+                <section class="dashboard-categories container" style="margin-bottom: 30px;">
+                    <div class="cat-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                        <div class="cat-card" onclick="setCategory('doctors')"
+                            style="background: #fff; padding: 20px 10px; border-radius: 15px; border: 1px solid #f0f0f0; text-align: center; cursor: pointer; transition: all 0.2s;">
+                            <div class="cat-icon"
+                                style="width: 50px; height: 50px; background: #fff5f6; color: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 1.4rem;">
+                                <i class="fas fa-user-md"></i>
+                            </div>
+                            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main);">Doctors</span>
                         </div>
-                        <h4 style="margin-bottom: 5px;">Find Doctors</h4>
-                        <p style="font-size: 0.85rem; color: var(--text-muted);">Confirmed bookings</p>
-                    </div>
-                    <div class="service-card" onclick="setCategory('Video Consult')"
-                        style="background: white; padding: 25px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center; cursor: pointer;">
-                        <div
-                            style="width: 70px; height: 70px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; color: var(--primary); font-size: 1.5rem;">
-                            <i class="fas fa-video"></i>
+                        <div class="cat-card" onclick="setCategory('labs')"
+                            style="background: #fff; padding: 20px 10px; border-radius: 15px; border: 1px solid #f0f0f0; text-align: center; cursor: pointer; transition: all 0.2s;">
+                            <div class="cat-icon"
+                                style="width: 50px; height: 50px; background: #e3f2fd; color: #1e88e5; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 1.4rem;">
+                                <i class="fas fa-microscope"></i>
+                            </div>
+                            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main);">Diagnostic
+                                Labs</span>
                         </div>
-                        <h4 style="margin-bottom: 5px;">Video Consult</h4>
-                        <p style="font-size: 0.85rem; color: var(--text-muted);">Connect in 60s</p>
-                    </div>
-                    <div class="service-card" onclick="setCategory('labs')"
-                        style="background: white; padding: 25px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center; cursor: pointer;">
-                        <div
-                            style="width: 70px; height: 70px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; color: var(--primary); font-size: 1.5rem;">
-                            <i class="fas fa-microscope"></i>
+                        <div class="cat-card" onclick="showPatientTab('pharmacy')"
+                            style="background: #fff; padding: 20px 10px; border-radius: 15px; border: 1px solid #f0f0f0; text-align: center; cursor: pointer; transition: all 0.2s;">
+                            <div class="cat-icon"
+                                style="width: 50px; height: 50px; background: #e8f5e9; color: #2ecc71; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 1.4rem;">
+                                <i class="fas fa-pills"></i>
+                            </div>
+                            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main);">Pharmacy</span>
                         </div>
-                        <h4 style="margin-bottom: 5px;">Lab Tests</h4>
-                        <p style="font-size: 0.85rem; color: var(--text-muted);">Home sample pickup</p>
-                    </div>
-                    <div class="service-card" onclick="setCategory('Medicines')"
-                        style="background: white; padding: 25px; border-radius: 15px; box-shadow: var(--shadow-soft); text-align: center; cursor: pointer;">
-                        <div
-                            style="width: 70px; height: 70px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; color: var(--primary); font-size: 1.5rem;">
-                            <i class="fas fa-pills"></i>
+                        <div class="cat-card" onclick="setCategory('doctors')"
+                            style="background: #fff; padding: 20px 10px; border-radius: 15px; border: 1px solid #f0f0f0; text-align: center; cursor: pointer; transition: all 0.2s;">
+                            <div class="cat-icon"
+                                style="width: 50px; height: 50px; background: #fff8e1; color: #ffca28; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 1.4rem;">
+                                <i class="fas fa-calendar-check"></i>
+                            </div>
+                            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main);">Book
+                                Appt</span>
                         </div>
-                        <h4 style="margin-bottom: 5px;">Medicines</h4>
-                        <p style="font-size: 0.85rem; color: var(--text-muted);">Essentials delivered</p>
                     </div>
+                </section>
+
+                <!-- Quick Actions Section -->
+                <section class="quick-actions container" style="margin-bottom: 40px;">
+                    <h3 style="margin-bottom: 20px; font-size: 1.2rem; font-weight: 700;">Quick Actions</h3>
+                    <div class="action-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                        <button class="action-btn" onclick="uploadPrescription()"
+                            style="background: #fff; border: 1.5px solid #eee; padding: 15px; border-radius: 15px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s;">
+                            <i class="fas fa-file-prescription" style="font-size: 1.5rem; color: var(--primary);"></i>
+                            <span style="font-weight: 600; font-size: 0.75rem;">Upload Prescription</span>
+                        </button>
+                        <button class="action-btn" onclick="showPatientTab('pharmacy')"
+                            style="background: #fff; border: 1.5px solid #eee; padding: 15px; border-radius: 15px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s;">
+                            <i class="fas fa-cart-shopping" style="font-size: 1.5rem; color: #2ecc71;"></i>
+                            <span style="font-weight: 600; font-size: 0.75rem;">Order Medicines</span>
+                        </button>
+                        <button class="action-btn" onclick="setCategory('labs')"
+                            style="background: #fff; border: 1.5px solid #eee; padding: 15px; border-radius: 15px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s;">
+                            <i class="fas fa-flask-vial" style="font-size: 1.5rem; color: #1e88e5;"></i>
+                            <span style="font-weight: 600; font-size: 0.75rem;">Book Lab Test</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Upcoming Appointment -->
+                <section id="upcoming-appointment-section" class="container hidden" style="margin-bottom: 40px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="font-size: 1.2rem; font-weight: 700;">Upcoming Appointment</h3>
+                    </div>
+                    <div id="upcoming-appointment-card">
+                        <!-- Injected by JS -->
+                    </div>
+                </section>
+
+                <!-- Medical Reports & History Summaries -->
+                <div class="dashboard-summaries container"
+                    style="display: grid; grid-template-columns: 1fr; gap: 40px; margin-bottom: 60px;">
+                    <section id="medical-reports-section">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="font-size: 1.2rem; font-weight: 700;">Medical Reports</h3>
+                            <a href="javascript:void(0)" onclick="showPatientSection('records')"
+                                style="color: var(--primary); font-size: 0.85rem; font-weight: 600; text-decoration: none;">View
+                                All</a>
+                        </div>
+                        <div id="home-reports-list" class="tile-list">
+                            <!-- Injected by JS -->
+                        </div>
+                    </section>
+
+                    <section id="order-history-section">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="font-size: 1.2rem; font-weight: 700;">Booking History</h3>
+                            <a href="javascript:void(0)" onclick="showPatientSection('history')"
+                                style="color: var(--primary); font-size: 0.85rem; font-weight: 600; text-decoration: none;">View
+                                All</a>
+                        </div>
+                        <div id="home-history-list" class="tile-list">
+                            <!-- Injected by JS -->
+                        </div>
+                    </section>
                 </div>
 
                 <!-- Specialty Grid -->
@@ -190,7 +324,7 @@
                         <h2 id="section-title">Verified Doctors</h2>
                         <div class="category-filters" style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <button class="filter-btn active">All</button>
-                            <select id="filter-lang" class="filter-select" style="border-radius:50px;">
+                            <select id="lang-switch" class="filter-select" style="border-radius:50px;">
                                 <option value="">Any Language</option>
                                 <option value="english">English</option>
                                 <option value="hindi">Hindi</option>
@@ -226,31 +360,57 @@
                 <div class="tile-list" id="patient-reports-list"></div>
             </div>
 
-            <!-- Tab: Personal Health Records -->
-            <div id="patient-records-tab" class="hidden container">
-                <div class="tab-header"
-                    style="margin-top: 40px; display: flex; justify-content: space-between; align-items: center;">
-                    <h2>My Health History & Records</h2>
-                    <button class="btn-signup" onclick="document.getElementById('record-upload-input').click()">
-                        <i class="fas fa-file-upload"></i> Upload Record
-                    </button>
-                    <input type="file" id="record-upload-input" class="hidden" onchange="uploadMedicalRecord(event)">
+            <!-- Tab: Pharmacy -->
+            <div id="patient-pharmacy-tab" class="hidden container" style="padding-top: 40px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+                    <h2>HealthMate Pharmacy</h2>
+                    <div style="position:relative; cursor:pointer;" onclick="openCart()">
+                        <i class="fas fa-shopping-cart" style="font-size:1.5rem; color:var(--primary);"></i>
+                        <span id="cart-count"
+                            style="position:absolute; top:-10px; right:-10px; background:#e74c3c; color:white; font-size:0.7rem; padding:2px 6px; border-radius:50%; font-weight:900;">0</span>
+                    </div>
                 </div>
-                <p style="color: var(--text-muted); margin-bottom: 25px;">Upload and manage your past prescriptions,
-                    scans, and reports.</p>
-                <div class="grid-container" id="patient-records-grid"
-                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
-                    <!-- Records will be injected here -->
+                <div style="margin-bottom:30px; display:flex; gap:15px;">
+                    <input type="text" id="medicine-search" placeholder="Search medicines, vitamins, products..."
+                        style="flex:1; padding:15px; border-radius:15px; border:1px solid #ddd;">
+                    <button class="btn-signup" onclick="uploadPrescription()"><i class="fas fa-prescription"></i> Upload
+                        Prescription</button>
                 </div>
+                <div id="pharmacy-grid"
+                    style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:20px;">
+                    <!-- Medicines Injected -->
+                </div>
+            </div>
+
+            <!-- Tab: Wallet -->
+            <div id="patient-wallet-tab" class="hidden container" style="padding-top: 40px;">
+                <div class="stats-grid"
+                    style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:30px;">
+                    <div class="admin-stat-card">
+                        <p>Wallet Balance</p>
+                        <h3>₹1,250</h3>
+                        <p style="color:var(--primary); font-size:0.8rem;">+ Top up now</p>
+                    </div>
+                    <div class="admin-stat-card">
+                        <p>Total Spent</p>
+                        <h3>₹12,400</h3>
+                    </div>
+                    <div class="admin-stat-card">
+                        <p>Pending Refunds</p>
+                        <h3>₹500</h3>
+                    </div>
+                </div>
+                <h3>Recent Transactions</h3>
+                <div class="tile-list" id="wallet-transactions-list" style="margin-top:20px;"></div>
             </div>
 
             <!-- Tab: Profile Settings -->
             <div id="patient-profile-tab" class="hidden container">
                 <div class="profile-layout">
                     <div class="profile-sidebar">
-                        <div class="profile-img-large">JD</div>
-                        <h3 id="profile-name-disp">John Doe</h3>
-                        <p id="profile-email-disp">user@mate.com</p>
+                        <div id="profile-img-disp" class="profile-img-large">??</div>
+                        <h3 id="profile-name-disp">Loading...</h3>
+                        <p id="profile-email-disp">Loading...</p>
                         <div class="profile-menu">
                             <button class="menu-item active" onclick="showProfileSub('general', event)"><i
                                     class="fas fa-user-gear"></i> General Info</button>
@@ -265,7 +425,7 @@
                     <div class="profile-main-content">
                         <div id="profile-general" class="profile-sub-section">
                             <div style="display:flex; align-items:center; gap:20px; margin-bottom:30px;">
-                                <div id="patient-profile-preview" class="profile-img-large" style="margin:0;">JD</div>
+                                <div id="patient-profile-preview" class="profile-img-large" style="margin:0;">??</div>
                                 <div>
                                     <h3>General Information</h3>
                                     <input type="file" id="patient-photo-input" accept="image/*"
@@ -276,11 +436,42 @@
                                 <i class="fas fa-user"></i>
                                 <input type="text" id="edit-name" placeholder="Full Name">
                             </div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                                <div class="input-with-icon"><i class="fas fa-calendar"></i><input type="date"
+                                        id="edit-dob" placeholder="DOB"></div>
+                                <div class="input-with-icon"><i class="fas fa-droplet"></i><select
+                                        id="edit-blood-group">
+                                        <option value="">Blood Group</option>
+                                        <option value="A+">A+</option>
+                                        <option value="B+">B+</option>
+                                        <option value="O+">O+</option>
+                                        <option value="AB+">AB+</option>
+                                    </select></div>
+                            </div>
                             <div class="input-with-icon">
                                 <i class="fas fa-phone"></i>
                                 <input type="text" id="edit-phone" placeholder="Phone Number">
                             </div>
-                            <button class="btn-signup" onclick="savePatientProfile()">Save Profile Changes</button>
+                            <div class="input-with-icon">
+                                <i class="fas fa-house"></i>
+                                <textarea id="edit-address" placeholder="Residential Address"
+                                    style="padding-left:45px;"></textarea>
+                            </div>
+                            <div class="input-with-icon">
+                                <i class="fas fa-handshake-angle"></i>
+                                <input type="text" id="edit-emergency" placeholder="Emergency Contact Name & Phone">
+                            </div>
+
+                            <button class="btn-signup" onclick="savePatientProfile()" style="width:100%;">Save Profile
+                                Changes</button>
+
+                            <hr style="margin:40px 0; border:0; border-top:1px solid #eee;">
+                            <h4 style="color:#e74c3c; margin-bottom:15px;"><i class="fas fa-triangle-exclamation"></i>
+                                Danger Zone</h4>
+                            <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:15px;">Permanently delete
+                                your HealthMate account and all medical data associated with it.</p>
+                            <button class="btn-signup" style="background:#e74c3c; width:100%;"
+                                onclick="deletePatientAccount()">Delete My Account Forever</button>
                         </div>
                         <div id="profile-history" class="profile-sub-section hidden">
                             <h3>History</h3>
@@ -379,8 +570,27 @@
                                     id="doc-profile-spec"></div>
                             <div class="input-group"><label>Fee (₹)</label><input type="number" id="doc-profile-fee">
                             </div>
-                            <div class="input-group"><label>Clinic Address</label><textarea
+                            <div class="input-group"><label>Primary Clinic Address</label><textarea
                                     id="doc-profile-address"></textarea></div>
+
+                            <hr style="margin:25px 0; border:0; border-top:1px solid #eee;">
+                            <h4 style="margin-bottom:15px;"><i class="fas fa-hospital"></i> Multi-Clinic Locations</h4>
+                            <div id="multi-clinic-list"
+                                style="margin-bottom:15px; display:flex; flex-direction:column; gap:10px;">
+                                <div
+                                    style="background:#f9f9f9; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                                    <span><strong>Main Branch</strong> - Morning (9-12)</span>
+                                    <span style="font-size:0.7rem; color:var(--primary);">Active</span>
+                                </div>
+                                <div
+                                    style="background:#f9f9f9; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                                    <span><strong>City Center</strong> - Evening (5-8)</span>
+                                    <button class="btn-small" style="padding:2px 8px; font-size:0.6rem;">Edit</button>
+                                </div>
+                            </div>
+                            <button class="btn-small"
+                                style="width:100%; border:1px dashed var(--primary); background:none; color:var(--primary); margin-bottom:20px;">+
+                                Add New Clinic Location</button>
                             <button class="btn-signup" onclick="saveDoctorProfile()" style="width:100%;">Save
                                 Changes</button>
                         </div>
@@ -443,7 +653,39 @@
                             <div class="input-group"><input type="number" id="new-test-price"
                                     placeholder="Test Price (₹)"></div>
                             <div class="input-group">
-                                <label style="font-size:0.8rem; color:var(--text-muted);">Test Image / Icon</label>
+                                <div id="booking-custom-fields" style="margin-top:20px;">
+                                    <label style="font-weight: 700; display: block; margin-bottom: 10px;">3. Additional
+                                        Details</label>
+                                    <textarea id="booking-symptoms" placeholder="Describe your symptoms (optional)"
+                                        style="width:100%; padding:15px; border-radius:10px; border:1px solid #ddd; margin-bottom:15px;"></textarea>
+
+                                    <div id="lab-collection-options" class="hidden" style="margin-bottom:20px;">
+                                        <label style="font-weight: 700; display: block; margin-bottom: 10px;">Collection
+                                            Preference</label>
+                                        <div style="display:flex; gap:10px;">
+                                            <button class="filter-btn active" onclick="setCollectionType('visit')"><i
+                                                    class="fas fa-hospital"></i> Visit Lab</button>
+                                            <button class="filter-btn" onclick="setCollectionType('home')"><i
+                                                    class="fas fa-house-user"></i> Home Pickup (+₹99)</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="upload-box"
+                                        onclick="document.getElementById('booking-report-input').click()"
+                                        style="border: 2px dashed #ddd; padding: 20px; text-align: center; border-radius: 15px; cursor: pointer;">
+                                        <i class="fas fa-cloud-upload-alt"
+                                            style="font-size: 2rem; color: var(--primary); margin-bottom: 10px;"></i>
+                                        <p style="font-size: 0.9rem; color: var(--text-muted);">Upload Previous Reports
+                                            (PDF/Image)</p>
+                                        <input type="file" id="booking-report-input" class="hidden"
+                                            onchange="handleBookingReport(event)">
+                                        <div id="booking-report-preview"
+                                            style="margin-top:10px; font-size:0.8rem; color:var(--primary);"></div>
+                                    </div>
+                                </div>
+
+                                <label style="font-weight: 700; display: block; margin: 25px 0 10px;">4. Payment Method
+                                    (Test Mode)</label>
                                 <input type="file" id="new-test-image" accept="image/*" style="font-size:0.8rem;">
                             </div>
                             <button class="btn-signup" onclick="addLabTest()" style="width:100%;">Add Test to
@@ -525,15 +767,52 @@
                 </aside>
                 <main class="doctor-main-content">
                     <div id="admin-overview-tab" class="doctor-tab">
-                        <h2>Summary</h2>
-                        <div id="admin-stats-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px;">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <h2>Executive Overview</h2>
+                            <div id="fraud-indicator"
+                                style="font-size:0.8rem; background:#fee; color:#c00; padding:5px 10px; border-radius:10px;"
+                                class="hidden">
+                                <i class="fas fa-shield-virus"></i> Fraud Protection Active
+                            </div>
                         </div>
-                        <div class="tile-list" id="admin-activity-list" style="margin-top:20px;"></div>
+                        <div id="admin-stats-grid"
+                            style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:30px;">
+                        </div>
+
+                        <h4 style="margin-bottom:15px;"><i class="fas fa-fire"></i> Live Power Analytics</h4>
+                        <div class="grid-container"
+                            style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:30px;">
+                            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
+                                <h4>Specialty Demand Heatmap</h4>
+                                <canvas id="specialtyChart" style="max-height: 200px; width:100%;"></canvas>
+                            </div>
+                            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
+                                <h4>Peak Booking Traffic</h4>
+                                <canvas id="peakHoursChart" style="max-height: 200px; width:100%;"></canvas>
+                            </div>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns:1fr 1.5fr; gap:20px;">
+                            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
+                                <h4><i class="fas fa-user-shield"></i> Sub-Admin Roles</h4>
+                                <div id="admin-roles-summary" style="width:100%; font-size:0.85rem;"></div>
+                            </div>
+                            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
+                                <h4><i class="fas fa-bolt"></i> Recent System Activity</h4>
+                                <div class="tile-list" id="admin-activity-list" style="width:100%;"></div>
+                            </div>
+                        </div>
                     </div>
+
                     <div id="admin-verifications-tab" class="doctor-tab hidden">
                         <h2>Pending Review</h2>
+                        <p style="color: var(--text-muted); margin-bottom: 20px;">Verify certificates and registration
+                            details before approving providers.</p>
                         <div class="tile-list" id="admin-verification-list"></div>
                     </div>
+                    <!-- Financials, Users, etc. follow -->
+
                     <div id="admin-financials-tab" class="doctor-tab hidden">
                         <div class="tab-header"
                             style="display:flex; justify-content:space-between; align-items:center;">
@@ -546,21 +825,13 @@
                         <h2>User Management</h2>
                         <div class="tile-list" id="admin-users-list"></div>
                     </div>
-                    <div id="admin-reports-tab" class="doctor-tab hidden">
-                        <h2>Advanced Analytics</h2>
-                        <canvas id="revenueChart" style="max-height: 300px; width:100%; margin-bottom: 30px;"></canvas>
-                        <div class="grid-container" style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
 
-                            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
-                                <h4>Top Performers</h4>
-                                <div id="admin-top-performers" style="width:100%; margin-top:10px;"></div>
-                            </div>
-                            <div class="tile-item" style="flex-direction:column; align-items:flex-start;">
-                                <h4>Service Breakdown</h4>
-                                <div id="admin-service-stats" style="width:100%; margin-top:10px;"></div>
-                            </div>
-                        </div>
+                    <div id="admin-reports-tab" class="doctor-tab hidden">
+                        <h2>Full Revenue Analytics</h2>
+                        <canvas id="revenueChart" style="max-height: 300px; width:100%; margin-bottom: 30px;"></canvas>
                     </div>
+
+
                     <div id="admin-complaints-tab" class="doctor-tab hidden">
                         <h2>User Support & Complaints</h2>
                         <div class="tile-list" id="admin-complaints-list">
@@ -577,10 +848,19 @@
                                     id="set-sla" value="30"></div>
                             <div class="input-group"><label>Enable Video Consultations</label><input type="checkbox"
                                     id="set-video" checked></div>
-                            <button class="btn-signup" style="width:100%;" onclick="saveAdminSettings()">Save
-                                Configurations</button>
+                            <button class="btn-signup" style="width:100%; margin-bottom: 20px;"
+                                onclick="saveAdminSettings()">Save Configurations</button>
+                            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+                            <h4 style="color:#e74c3c; margin-bottom:10px;"><i class="fas fa-trash-alt"></i> Danger Zone
+                            </h4>
+                            <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:15px;">Caution: This will
+                                permanently remove all users (patients, doctors, labs) and appointments from the system
+                                except for the Admin account.</p>
+                            <button class="btn-signup" style="width:100%; background: #e74c3c;"
+                                onclick="clearAllUsersExceptAdmin()">Factory Reset Users & Data</button>
                         </div>
                     </div>
+
                     <div id="admin-cms-tab" class="doctor-tab hidden">
                         <h2>Content Management (CMS)</h2>
                         <div class="profile-form">
@@ -597,7 +877,52 @@
 
             </div>
         </section>
+        </section>
+
+        <!-- Role: ONBOARDING -->
+        <section id="onboarding-view" class="role-section hidden container">
+            <div class="onboarding-container" style="max-width: 800px; margin: 0 auto;">
+                <div class="stepper" id="onboarding-stepper">
+                    <div class="step active" data-step="1">
+                        <div class="step-circle">1</div>
+                        <div class="step-label">Basic</div>
+                    </div>
+                    <div class="step" data-step="2">
+                        <div class="step-circle">2</div>
+                        <div class="step-label">Professional</div>
+                    </div>
+                    <div class="step" data-step="3">
+                        <div class="step-circle">3</div>
+                        <div class="step-label">Clinic</div>
+                    </div>
+                    <div class="step" data-step="4">
+                        <div class="step-circle">4</div>
+                        <div class="step-label">Documents</div>
+                    </div>
+                    <div class="step" data-step="5">
+                        <div class="step-circle">5</div>
+                        <div class="step-label">Bank</div>
+                    </div>
+                    <div class="step" data-step="6">
+                        <div class="step-circle">6</div>
+                        <div class="step-label">Final</div>
+                    </div>
+                </div>
+
+                <div id="onboarding-form-container" class="profile-form" style="max-width: 100%;">
+                    <!-- Step-based content will be injected by JS -->
+                    <div id="onboarding-step-content"></div>
+
+                    <div class="onboarding-actions">
+                        <button class="btn-signup" id="onboarding-prev" style="background: #eee; color: #333;"
+                            onclick="prevOnboardingStep()">Back</button>
+                        <button class="btn-signup" id="onboarding-next" onclick="nextOnboardingStep()">Continue</button>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
+
 
     <!-- Auth System -->
     <div id="auth-overlay" class="auth-overlay hidden">
@@ -617,6 +942,15 @@
                 </div>
                 <button type="submit" class="btn-signup" style="width:100%; margin-top:20px;">Login</button>
             </form>
+            <div
+                style="margin-top:20px; border-top:1px solid #eee; padding-top:20px; display:flex; flex-direction:column; gap:10px;">
+                <button class="btn-signup" style="background:#fff; color:#555; border:1px solid #ddd; width:100%;"
+                    onclick="handleGoogleLogin()"><img
+                        src="https://lh3.googleusercontent.com/COxitqSgS1P-B8GEqP8nm_HXMbuPajqHpx0WTrfGvS94m_p88A2xM4qR0b2Jd6H4X02"
+                        style="width:18px; margin-right:10px; vertical-align:middle;"> Sign in with Google</button>
+                <button class="btn-signup" style="background:#fff; color:#555; border:1px solid #ddd; width:100%;"
+                    onclick="simulateOTP()"><i class="fas fa-mobile-screen-button"></i> Login via OTP (Phone)</button>
+            </div>
             <p style="margin-top:15px; font-size:0.9rem;">New here? <a href="javascript:void(0)"
                     onclick="toggleAuth('register')" style="color:var(--primary); font-weight:600;">Create Account</a>
             </p>
@@ -638,8 +972,7 @@
                             placeholder="Phone" required></div>
                     <div class="input-with-icon">
                         <i class="fas fa-user-tag"></i>
-                        <select id="reg-role" required
-                            style="width:100%; padding:10px; border:none; outline:none; background:transparent;">
+                        <select id="reg-role" required style="width:100%; outline:none; background:transparent;">
                             <option value="patient">Patient</option>
                             <option value="doctor">Doctor</option>
                             <option value="lab">Diagnostic Lab</option>
@@ -656,12 +989,9 @@
     </div>
 
     <!-- Booking Modal -->
-    <div class="modal hidden" id="booking-modal"
-        style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9000; display:flex; align-items:center; justify-content:center;">
-        <div class="modal-content"
-            style="background:white; padding:30px; border-radius:20px; max-width:500px; width:90%; position:relative;">
-            <span class="close-modal"
-                style="position:absolute; top:15px; right:15px; font-size:1.5rem; cursor:pointer;">&times;</span>
+    <div class="modal hidden" id="booking-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
             <div id="modal-body"></div>
         </div>
     </div>
@@ -690,7 +1020,17 @@
     </div>
 
     <div id="toast-container" class="toast-container"></div>
-    <script src="script.js?v=2.0.6"></script>
+    <script src="script.js?v=2.1.0"></script>
+    <script>
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker: Registered'))
+                    .catch(err => console.log(`Service Worker: Error: ${err}`));
+            });
+        }
+    </script>
 </body>
 
 </html>
