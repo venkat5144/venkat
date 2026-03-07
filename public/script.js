@@ -1021,7 +1021,7 @@ window.openBooking = function (itemId) {
             <h3 style="margin-bottom:15px; font-size:1.3rem;">Book Appointment</h3>
             <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:25px;">${item.name} | ${item.specialty || 'Healthcare'}</p>
 
-            <label style="font-weight: 700; display: block; margin-bottom:15px;">1. Select Time Slot</label>
+            <label style="font-weight: 700; display: block; margin-bottom:15px;">Select Time Slot</label>
             <div class="slot-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:30px;">
                 ${slots.map(s => `
                     <div class="slot-item ${s === bestSlot ? 'selected recommended' : ''}" onclick="selectSlot(this, '${s}')" 
@@ -1032,33 +1032,6 @@ window.openBooking = function (itemId) {
                 `).join('')}
             </div>
 
-            <label style="font-weight: 700; display: block; margin-bottom:15px;">2. Secure Payment</label>
-            <div class="payment-selector-premium" style="display:flex; flex-direction:column; gap:12px; margin-bottom:30px;">
-                <div class="pay-option card active" onclick="selectPayMethod(this, 'online')" 
-                     style="display:flex; align-items:center; gap:15px; padding:18px; border:1px solid var(--primary); border-radius:15px; cursor:pointer; background:#fffcfc; transition:all 0.2s;">
-                    <div style="width:40px; height:40px; background:#fff0f0; border-radius:10px; display:flex; align-items:center; justify-content:center;">
-                        <i class="fas fa-mobile-screen" style="color:var(--primary); font-size:1.2rem;"></i>
-                    </div>
-                    <div>
-                        <h4 style="font-size:1rem; margin-bottom:2px;">UPI (Google Pay/PhonePe)</h4>
-                        <p style="font-size:0.75rem; color:var(--text-muted);">Confirm order via your Mobile App</p>
-                    </div>
-                    <i class="fas fa-circle-check" style="margin-left:auto; color:var(--primary);"></i>
-                </div>
-
-                <div class="pay-option card" onclick="selectPayMethod(this, 'card')" 
-                     style="display:flex; align-items:center; gap:15px; padding:18px; border:1px solid #eee; border-radius:15px; cursor:pointer; background:#fff; transition:all 0.2s;">
-                    <div style="width:40px; height:40px; background:#f9f9f9; border-radius:10px; display:flex; align-items:center; justify-content:center;">
-                        <i class="fas fa-credit-card" style="color:#555; font-size:1.2rem;"></i>
-                    </div>
-                    <div>
-                        <h4 style="font-size:1rem; margin-bottom:2px;">Debit / Credit Card</h4>
-                        <p style="font-size:0.75rem; color:var(--text-muted);">Visa / Mastercard / Amex</p>
-                    </div>
-                    <i class="far fa-circle" style="margin-left:auto; color:#ddd;"></i>
-                </div>
-
-            </div>
 
             <div class="payment-summary" style="background:#fcfcfc; border:1px solid #f0f0f0; border-radius:15px; padding:20px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:12px; font-size:0.95rem;">
@@ -2075,46 +2048,30 @@ window.simulateGPS = function () {
 
         setTimeout(() => {
             const allProviders = [...AppState.doctors, ...AppState.labs];
-            const MAX_NEARBY_KM = 10; // Only show within 10km
 
             // Calculate distance for all providers (including all their branches)
-            let ranked = allProviders.map(p => {
+            const ranked = allProviders.map(p => {
                 // Check primary location + all branches
-                const branchDistances = (p.locations || []).map(l => getHaversineDistance(latitude, longitude, l.lat, l.lng)).filter(d => d < 999);
+                const branchDistances = (p.locations || []).map(l => getHaversineDistance(latitude, longitude, l.lat, l.lng));
                 const primaryDist = getHaversineDistance(latitude, longitude, p.lat, p.lng);
-
-                const validDists = [primaryDist, ...branchDistances].filter(d => d < 999);
-                const minDistance = validDists.length > 0 ? Math.min(...validDists) : 999;
-
+                const minDistance = Math.min(primaryDist, ...branchDistances);
                 return { ...p, distance: minDistance };
-            })
-                .filter(p => p.distance <= MAX_NEARBY_KM) // PROXIMITY FILTER
-                .sort((a, b) => a.distance - b.distance);
+            }).sort((a, b) => a.distance - b.distance).slice(0, 5);
 
-            if (ranked.length === 0) {
-                grid.innerHTML = `
-                    <div style="text-align:center; padding:40px; width:100%; color:var(--text-muted);">
-                        <i class="fas fa-map-location-dot" style="font-size:3rem; margin-bottom:15px; opacity:0.3;"></i>
-                        <p>No doctors or labs found within ${MAX_NEARBY_KM}km of your location.</p>
-                        <button class="btn-small" style="margin-top:15px; background:none; border:1px solid var(--primary); color:var(--primary);" onclick="renderGrid()">Show All Providers</button>
+            grid.innerHTML = ranked.map(item => `
+                <div class="tile-item" onclick="openDetailsView('${item.id}', '${item.collection || (item.role === 'lab' ? 'labs' : 'doctors')}')" style="cursor:pointer;">
+                    <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">${item.name[0]}</div>
+                    <div class="tile-info">
+                        <h4>${item.name}</h4>
+                        <p><i class="fas fa-location-arrow"></i> ${item.distance === 999 ? 'Distance N/A' : `~${item.distance} km away`} • ${item.specialty || 'General'}</p>
                     </div>
-                `;
-            } else {
-                grid.innerHTML = ranked.map(item => `
-                    <div class="tile-item" onclick="openDetailsView('${item.id}', '${item.collection || (item.role === 'lab' ? 'labs' : 'doctors')}')" style="cursor:pointer;">
-                        <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">${item.name[0]}</div>
-                        <div class="tile-info">
-                            <h4>${item.name}</h4>
-                            <p><i class="fas fa-location-arrow"></i> ~${item.distance} km away • ${item.specialty || 'General'}</p>
-                        </div>
-                        <div style="text-align:right;">
-                            <span style="color:#2ecc71; font-weight:700; font-size:0.8rem;">OPEN</span>
-                            <p style="font-size:0.7rem; color:var(--text-muted);">₹${item.price}</p>
-                        </div>
+                    <div style="text-align:right;">
+                        <span style="color:#2ecc71; font-weight:700; font-size:0.8rem;">OPEN</span>
+                        <p style="font-size:0.7rem; color:var(--text-muted);">₹${item.price}</p>
                     </div>
-                `).join('');
-                showToast(`Found ${ranked.length} services near you!`);
-            }
+                </div>
+            `).join('');
+            showToast("Nearby services updated based on your exact location!");
         }, 800);
     });
 };
