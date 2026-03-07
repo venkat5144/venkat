@@ -7,7 +7,7 @@
 // const db = firebase.firestore();
 // const auth = firebase.auth();
 
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.2.0";
 console.log("HealthMate App Loading. Version:", APP_VERSION);
 
 
@@ -1024,7 +1024,7 @@ window.confirmBooking = async function (itemId, type, paymentData = { status: 'P
         type: type,
         time: AppState.selectedSlot,
         price: parseInt(item.price) || 500,
-        commission: Math.floor((parseInt(item.price) || 500) * 0.1),
+        commission: Math.floor((parseInt(item.price) || 500) * 0.20), // Standardized 20% Commission
         status: 'pending',
         paymentStatus: paymentData.status,
         paymentMode: paymentData.mode,
@@ -1500,21 +1500,35 @@ function renderDoctorDashboard() {
         const commission = Math.floor(monthEarnings * 0.20);
         const netEarnings = monthEarnings - commission;
 
+        const pendingSettlement = myApps.filter(a => a.status === 'approved' && a.payoutStatus === 'Pending').reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+        const upcomingPayout = myApps.filter(a => a.payoutStatus === 'Settled' && a.payoutDate && a.payoutDate.toDate() > now).reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+        const settledPayout = myApps.filter(a => a.payoutStatus === 'Settled' && a.payoutDate && a.payoutDate.toDate() <= now).reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+
+        const commRate = (AppState.user.commissionRate || 20) / 100;
+        const netFactor = 1 - commRate;
+
+        const netPending = Math.floor(pendingSettlement * netFactor);
+        const netUpcoming = Math.floor(upcomingPayout * netFactor);
+        const netSettled = Math.floor(settledPayout * netFactor);
+
         summaryMetrics.innerHTML = `
             <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
                 <i class="fas fa-calendar-check" style="color:var(--primary); font-size:1.5rem; margin-bottom:10px;"></i>
-                <h3>${monthlyApps.length}</h3>
-                <p style="color:var(--text-muted); font-size:0.9rem;">Monthly Appointments</p>
+                <h3>₹${netPending}</h3>
+                <p style="color:var(--text-muted); font-size:0.9rem;">Pending Settlement</p>
+                <span style="font-size:0.7rem; color:#e67e22;">Waiting for Admin</span>
             </div>
             <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <i class="fas fa-indian-rupee-sign" style="color:#2ecc71; font-size:1.5rem; margin-bottom:10px;"></i>
-                <h3>₹${monthEarnings}</h3>
-                <p style="color:var(--text-muted); font-size:0.9rem;">Gross Earnings (Total)</p>
+                <i class="fas fa-clock" style="color:#3498db; font-size:1.5rem; margin-bottom:10px;"></i>
+                <h3>₹${netUpcoming}</h3>
+                <p style="color:var(--text-muted); font-size:0.9rem;">Upcoming (1 Week Wait)</p>
+                <span style="font-size:0.7rem; color:#3498db;">Processing...</span>
             </div>
             <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <i class="fas fa-wallet" style="color:var(--primary); font-size:1.5rem; margin-bottom:10px;"></i>
-                <h3 style="color:#2ecc71;">₹${netEarnings}</h3>
-                <p style="color:var(--text-muted); font-size:0.9rem;">Net Payout (After 20%)</p>
+                <i class="fas fa-wallet" style="color:#2ecc71; font-size:1.5rem; margin-bottom:10px;"></i>
+                <h3 style="color:#2ecc71;">₹${netSettled}</h3>
+                <p style="color:var(--text-muted); font-size:0.9rem;">Available for Withdrawal</p>
+                <span style="font-size:0.7rem; color:#2ecc71;">Ready</span>
             </div>
         `;
     }
@@ -1612,6 +1626,62 @@ window.showDoctorTab = function (tab, event) {
     if (event && event.currentTarget) event.currentTarget.classList.add('active');
 
     if (tab === 'summary') renderDoctorDashboard();
+    if (tab === 'statements') renderDoctorStatements();
+};
+
+window.renderDoctorStatements = async function () {
+    const list = document.getElementById('doctor-statements-list');
+    if (!list) return;
+
+    list.innerHTML = `<p style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading statements...</p>`;
+
+    try {
+        const snap = await db.collection('settlements')
+            .where('providerId', '==', AppState.user.id)
+            .orderBy('createdAt', 'desc')
+            .get();
+
+        if (snap.empty) {
+            list.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No settlement records found yet.</p>`;
+            return;
+        }
+
+        list.innerHTML = snap.docs.map(doc => {
+            const s = doc.data();
+            const date = s.createdAt?.toDate().toLocaleDateString() || 'N/A';
+            const payoutDate = s.scheduledPayoutDate?.toDate().toLocaleDateString() || 'Processing';
+            const isReady = s.scheduledPayoutDate?.toDate() <= new Date();
+
+            return `
+                <div class="tile-item" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                    <div style="display: flex; justify-content: space-between; width: 100%;">
+                        <span style="font-weight: 700; color: var(--text-muted);">Ref: ${doc.id.slice(0, 8).toUpperCase()}</span>
+                        <span class="tile-badge status-${isReady ? 'approved' : 'pending'}">${isReady ? 'PAID' : 'UPCOMING'}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; width: 100%; border-top: 1px dashed #eee; padding-top: 10px;">
+                        <div>
+                            <p style="font-size: 0.7rem; color: var(--text-muted); margin: 0;">Gross</p>
+                            <p style="font-weight: 600; margin: 2px 0;">₹${s.grossAmount}</p>
+                        </div>
+                        <div>
+                            <p style="font-size: 0.7rem; color: var(--primary); margin: 0;">Platform Fee</p>
+                            <p style="font-weight: 600; margin: 2px 0; color: var(--primary);">₹${s.commission}</p>
+                        </div>
+                        <div>
+                            <p style="font-size: 0.7rem; color: #2ecc71; margin: 0;">Net Received</p>
+                            <p style="font-weight: 700; margin: 2px 0; color: #2ecc71;">₹${s.netAmount}</p>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">
+                        <i class="fas fa-calendar-alt"></i> Settled on: ${date} | <i class="fas fa-money-bill-transfer"></i> Payout Date: ${payoutDate}
+                    </p>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error("Statement fetch failed:", err);
+        list.innerHTML = `<p style="text-align: center; padding: 20px; color: #e74c3c;">Failed to load statements.</p>`;
+    }
 };
 
 window.openDetailsView = function (itemId, type) {
@@ -1807,21 +1877,32 @@ function renderLabDashboard() {
         const commission = Math.floor(monthEarnings * 0.20);
         const netEarnings = monthEarnings - commission;
 
+        const pendingSettlement = myApps.filter(a => a.status === 'approved' && a.payoutStatus === 'Pending').reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+        const upcomingPayout = myApps.filter(a => a.payoutStatus === 'Settled' && a.payoutDate && a.payoutDate.toDate() > now).reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+        const settledPayout = myApps.filter(a => a.payoutStatus === 'Settled' && a.payoutDate && a.payoutDate.toDate() <= now).reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+
+        const commRate = (AppState.user.commissionRate || 20) / 100;
+        const netFactor = 1 - commRate;
+
+        const netPending = Math.floor(pendingSettlement * netFactor);
+        const netUpcoming = Math.floor(upcomingPayout * netFactor);
+        const netSettled = Math.floor(settledPayout * netFactor);
+
         summaryMetrics.innerHTML = `
             <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
                 <i class="fas fa-microscope" style="color:var(--primary); font-size:1.5rem; margin-bottom:10px;"></i>
-                <h3>${monthlyApps.length}</h3>
-                <p style="color:var(--text-muted); font-size:0.9rem;">Monthly Tests</p>
+                <h3>₹${netPending}</h3>
+                <p style="color:var(--text-muted); font-size:0.9rem;">Pending Settlement</p>
             </div>
             <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <i class="fas fa-file-invoice-dollar" style="color:#2ecc71; font-size:1.5rem; margin-bottom:10px;"></i>
-                <h3>₹${monthEarnings}</h3>
-                <p style="color:var(--text-muted); font-size:0.9rem;">Gross Revenue</p>
+                <i class="fas fa-clock" style="color:#3498db; font-size:1.5rem; margin-bottom:10px;"></i>
+                <h3>₹${netUpcoming}</h3>
+                <p style="color:var(--text-muted); font-size:0.9rem;">Upcoming (1 Week Wait)</p>
             </div>
             <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <i class="fas fa-piggy-bank" style="color:var(--primary); font-size:1.5rem; margin-bottom:10px;"></i>
-                <h3 style="color:#2ecc71;">₹${netEarnings}</h3>
-                <p style="color:var(--text-muted); font-size:0.9rem;">Net Settlement</p>
+                <i class="fas fa-piggy-bank" style="color:#2ecc71; font-size:1.5rem; margin-bottom:10px;"></i>
+                <h3 style="color:#2ecc71;">₹${netSettled}</h3>
+                <p style="color:var(--text-muted); font-size:0.9rem;">Available to Withdraw</p>
             </div>
         `;
     }
@@ -1883,12 +1964,68 @@ window.showLabTab = function (tab, event) {
 
     if (tab === 'summary') renderLabDashboard();
     if (tab === 'technician') renderLabTechnician();
+    if (tab === 'statements') renderLabStatements();
 
     if (tab === 'profile' && AppState.user) {
         const currentLab = AppState.labs.find(l => l.id === AppState.user.id) || AppState.user;
         document.getElementById('lab-profile-spec').value = currentLab.specialty || '';
         document.getElementById('lab-profile-fee').value = currentLab.price || '';
         document.getElementById('lab-profile-address').value = currentLab.address || '';
+    }
+};
+
+window.renderLabStatements = async function () {
+    const list = document.getElementById('lab-statements-list');
+    if (!list) return;
+
+    list.innerHTML = `<p style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading statements...</p>`;
+
+    try {
+        const snap = await db.collection('settlements')
+            .where('providerId', '==', AppState.user.id)
+            .orderBy('createdAt', 'desc')
+            .get();
+
+        if (snap.empty) {
+            list.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No settlement records found yet.</p>`;
+            return;
+        }
+
+        list.innerHTML = snap.docs.map(doc => {
+            const s = doc.data();
+            const date = s.createdAt?.toDate().toLocaleDateString() || 'N/A';
+            const payoutDate = s.scheduledPayoutDate?.toDate().toLocaleDateString() || 'Processing';
+            const isReady = s.scheduledPayoutDate?.toDate() <= new Date();
+
+            return `
+                <div class="tile-item" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                    <div style="display: flex; justify-content: space-between; width: 100%;">
+                        <span style="font-weight: 700; color: var(--text-muted);">Ref: ${doc.id.slice(0, 8).toUpperCase()}</span>
+                        <span class="tile-badge status-${isReady ? 'approved' : 'pending'}">${isReady ? 'PAID' : 'UPCOMING'}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; width: 100%; border-top: 1px dashed #eee; padding-top: 10px;">
+                        <div>
+                            <p style="font-size: 0.7rem; color: var(--text-muted); margin: 0;">Revenue</p>
+                            <p style="font-weight: 600; margin: 2px 0;">₹${s.grossAmount}</p>
+                        </div>
+                        <div>
+                            <p style="font-size: 0.7rem; color: var(--primary); margin: 0;">Platform Fee</p>
+                            <p style="font-weight: 600; margin: 2px 0; color: var(--primary);">₹${s.commission}</p>
+                        </div>
+                        <div>
+                            <p style="font-size: 0.7rem; color: #2ecc71; margin: 0;">Net Income</p>
+                            <p style="font-weight: 700; margin: 2px 0; color: #2ecc71;">₹${s.netAmount}</p>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">
+                        <i class="fas fa-calendar-alt"></i> Settled on: ${date} | <i class="fas fa-truck-fast"></i> Payout: ${payoutDate}
+                    </p>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error("Statement fetch failed:", err);
+        list.innerHTML = `<p style="text-align: center; padding: 20px; color: #e74c3c;">Failed to load statements.</p>`;
     }
 };
 
@@ -2013,9 +2150,10 @@ function renderAdminDashboard() {
     }
 
     const totalBookings = AppState.appointments.length;
-    const paidApps = AppState.appointments.filter(a => a.paymentStatus === 'Paid');
+    const paidApps = AppState.appointments.filter(a => a.paymentStatus === 'Paid' || a.status === 'approved');
     const totalRev = paidApps.reduce((acc, a) => acc + (parseInt(a.price) || 0), 0);
-    const totalComm = AppState.appointments.reduce((acc, a) => acc + (a.commission || 0), 0);
+    // Only count commission from PAID appointments
+    const totalComm = paidApps.reduce((acc, a) => acc + (a.commission || Math.floor(parseInt(a.price || 0) * 0.20)), 0);
 
     if (statsGrid) {
         statsGrid.innerHTML = `
@@ -2032,11 +2170,13 @@ function renderAdminDashboard() {
     const COMMISSION_RATE = 0.20; // 20% platform fee
     const providers = [...AppState.doctors, ...AppState.labs];
     const payouts = providers.map(p => {
-        const grossEarnings = AppState.appointments
-            .filter(a => a.targetId === p.id && a.status === 'approved')
-            .reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+        const pendingApps = AppState.appointments
+            .filter(a => a.targetId === p.id && a.status === 'approved' && a.payoutStatus === 'Pending');
 
-        const commission = Math.floor(grossEarnings * COMMISSION_RATE);
+        const grossEarnings = pendingApps.reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+
+        const rate = (p.commissionRate || 20) / 100;
+        const commission = Math.floor(grossEarnings * rate);
         const netSettlement = grossEarnings - commission;
 
         return { ...p, grossEarnings, commission, netSettlement };
@@ -2058,7 +2198,7 @@ function renderAdminDashboard() {
                             <p style="margin: 5px 0 0 0; font-weight: 700;">₹${p.grossEarnings}</p>
                         </div>
                         <div>
-                            <p style="margin: 0; color: var(--primary);">- 20% Commission</p>
+                            <p style="margin: 0; color: var(--primary);">- Commission</p>
                             <p style="margin: 5px 0 0 0; font-weight: 700; color: var(--primary);">₹${p.commission}</p>
                         </div>
                         <div>
@@ -2169,9 +2309,55 @@ function initAdminCharts() {
 
 
 // Updated settlePayout to show the breakdown in the toast
-window.settlePayout = function (id, netAmt, grossAmt, commAmt) {
-    showToast(`Settlement Approved!\nGross: ₹${grossAmt} | Fee: ₹${commAmt} | Credited: ₹${netAmt}`, "success");
-    // In a real app, you would update the database here.
+// Updated settlePayout to actually update Firestore and implement 1-week delay
+window.settlePayout = async function (id, netAmt, grossAmt, commAmt) {
+    if (!confirm(`Are you sure you want to settle ₹${netAmt} for this provider? The amount will reflect in 1 week.`)) return;
+
+    showToast("Processing Settlement...");
+    try {
+        // Find all pending appointments for this provider
+        const pendingSnap = await db.collection('appointments')
+            .where('targetId', '==', id)
+            .where('status', '==', 'approved')
+            .where('payoutStatus', '==', 'Pending')
+            .get();
+
+        if (pendingSnap.empty) {
+            return showToast("No pending appointments found for settlement", "warning");
+        }
+
+        const batch = db.batch();
+        const settlementDate = new Date();
+        settlementDate.setDate(settlementDate.getDate() + 7); // 1 week delay
+
+        pendingSnap.docs.forEach(doc => {
+            batch.update(doc.ref, {
+                payoutStatus: 'Settled',
+                payoutDate: firebase.firestore.Timestamp.fromDate(settlementDate),
+                settledAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+
+        // Log the settlement for Admin audit
+        const settlementLogRef = db.collection('settlements').doc();
+        batch.set(settlementLogRef, {
+            providerId: id,
+            grossAmount: grossAmt,
+            commission: commAmt,
+            netAmount: netAmt,
+            appointmentCount: pendingSnap.size,
+            scheduledPayoutDate: firebase.firestore.Timestamp.fromDate(settlementDate),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await batch.commit();
+
+        showToast(`Settlement Approved!\nGross: ₹${grossAmt} | Fee: ₹${commAmt} | Credited: ₹${netAmt}`, "success");
+        renderAdminDashboard();
+    } catch (err) {
+        console.error("Settlement failed:", err);
+        showToast("Settlement failed: " + err.message, "error");
+    }
 };
 
 // --- Admin Actions Extended ---
@@ -2347,8 +2533,44 @@ window.showAdminTab = function (tab, event) {
     if (event) event.currentTarget.classList.add('active');
 
     // Render specific tab content if needed
-    if (tab === 'users') {
-        renderAdminUsers();
+    if (tab === 'financials') {
+        renderAdminDashboard();
+        renderAdminSettlementHistory();
+    }
+};
+
+window.renderAdminSettlementHistory = async function () {
+    const list = document.getElementById('admin-settlement-history-list');
+    if (!list) return;
+
+    try {
+        const snap = await db.collection('settlements').orderBy('createdAt', 'desc').limit(20).get();
+        if (snap.empty) {
+            list.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--text-muted);">No settlement logs found.</p>`;
+            return;
+        }
+
+        list.innerHTML = snap.docs.map(doc => {
+            const s = doc.data();
+            const provider = [...AppState.doctors, ...AppState.labs].find(p => p.id === s.providerId);
+            const date = s.createdAt?.toDate().toLocaleDateString() || 'N/A';
+            const isReady = s.scheduledPayoutDate?.toDate() <= new Date();
+
+            return `
+                <div class="tile-item" style="padding: 12px; font-size: 0.85rem;">
+                    <div class="tile-info">
+                        <h4 style="font-size: 0.9rem;">${provider?.name || 'Unknown Provider'}</h4>
+                        <p>${date} • ${s.appointmentCount} bookings • <span style="color: ${isReady ? '#2ecc71' : '#e67e22'}; font-weight: 600;">${isReady ? 'Completed' : 'Scheduled: ' + s.scheduledPayoutDate?.toDate().toLocaleDateString()}</span></p>
+                    </div>
+                    <div style="text-align: right;">
+                        <p style="font-weight: 700; margin: 0;">₹${s.netAmount}</p>
+                        <p style="font-size: 0.7rem; color: var(--text-muted); margin: 0;">Fee: ₹${s.commission}</p>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        list.innerHTML = `<p style="color: red;">Error loading logs: ${err.message}</p>`;
     }
 };
 
@@ -2374,9 +2596,59 @@ window.updateAppStatus = async function (appId, status) {
     }
 };
 
-window.bulkSettlePayouts = function () {
-    if (!confirm("Confirm bulk settlement for all approved providers?")) return;
-    showToast("Processing bulk payouts... ₹24,500 settled via Platform Wallet.", "success");
+// Updated bulkSettlePayouts to implement actual settlements for all providers
+window.bulkSettlePayouts = async function () {
+    const providers = [...AppState.doctors, ...AppState.labs];
+    const payouts = providers.map(p => {
+        const pendingApps = AppState.appointments
+            .filter(a => a.targetId === p.id && a.status === 'approved' && a.payoutStatus === 'Pending');
+        const rate = (p.commissionRate || 20) / 100;
+        const grossEarnings = pendingApps.reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+        const commission = Math.floor(grossEarnings * rate);
+        const netSettlement = grossEarnings - commission;
+        return { ...p, grossEarnings, commission, netSettlement, pendingApps };
+    }).filter(p => p.grossEarnings > 0);
+
+    if (payouts.length === 0) return showToast("No pending payouts to settle", "info");
+
+    if (!confirm(`Confirm bulk settlement for ${payouts.length} providers? All amounts will reflect in 1 week.`)) return;
+
+    showToast(`Settling ${payouts.length} providers...`);
+    try {
+        const batch = db.batch();
+        const settlementDate = new Date();
+        settlementDate.setDate(settlementDate.getDate() + 7);
+
+        payouts.forEach(p => {
+            p.pendingApps.forEach(app => {
+                const ref = db.collection('appointments').doc(app.id);
+                batch.update(ref, {
+                    payoutStatus: 'Settled',
+                    payoutDate: firebase.firestore.Timestamp.fromDate(settlementDate),
+                    settledAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+
+            // Log entry for each provider
+            const logRef = db.collection('settlements').doc();
+            batch.set(logRef, {
+                providerId: p.id,
+                grossAmount: p.grossEarnings,
+                commission: p.commission,
+                netAmount: p.netSettlement,
+                appointmentCount: p.pendingApps.length,
+                scheduledPayoutDate: firebase.firestore.Timestamp.fromDate(settlementDate),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                type: 'Bulk'
+            });
+        });
+
+        await batch.commit();
+        showToast("Bulk settlement successful!", "success");
+        renderAdminDashboard();
+    } catch (err) {
+        showToast("Bulk settlement failed: " + err.message, "error");
+    }
 };
 
 function detectFraudulentUsers() {
