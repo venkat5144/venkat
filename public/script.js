@@ -2482,41 +2482,84 @@ window.rejectProvider = async function (id, collection) {
     }
 };
 function renderAdminUsers() {
-    const usersList = document.getElementById('admin-users-list');
-    if (!usersList) return;
+    const list = document.getElementById('admin-users-list');
+    if (!list) return;
 
-    const allUsers = [
-        ...AppState.doctors.map(d => ({ ...d, collection: 'doctors' })),
-        ...AppState.labs.map(l => ({ ...l, collection: 'labs' }))
-    ];
+    // Filter to exclude current admin for safety
+    const allUsers = AppState.users.filter(u => u.id !== AppState.user.id);
+
     if (allUsers.length === 0) {
-        usersList.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No users found.</p>`;
+        list.innerHTML = `<p style="text-align:center; padding:40px; color:var(--text-muted);">No other users found.</p>`;
         return;
     }
-    usersList.innerHTML = allUsers.map(u => {
-        const userObj = AppState.users.find(usr => usr.id === u.id);
-        const email = u.email || userObj?.email || 'No email';
-        return `
-            <div class="tile-item">
-                <div class="tile-info">
-                    <h4>${u.name}</h4>
-                    <p>${u.approved ? 'Approved' : 'Pending'} – ${email}</p>
-                    <div style="margin-top:5px; display:flex; gap:5px;">
-                        <select onchange="updateUserRole('${u.id}', this.value)" style="font-size:0.7rem; padding:2px; border-radius:5px;">
-                            <option value="provider" ${!u.adminRole ? 'selected' : ''}>Standard Provider</option>
-                            <option value="finance" ${u.adminRole === 'finance' ? 'selected' : ''}>Finance Admin</option>
-                            <option value="support" ${u.adminRole === 'support' ? 'selected' : ''}>Support Admin</option>
-                        </select>
-                    </div>
-                </div>
-                ${u.approved ? '<span style="color:#2ecc71; font-weight:700;"><i class="fas fa-check-circle"></i> Approved</span>' : `<button class="btn-book" onclick="approveProvider('${u.id}', '${u.collection}')">Approve</button>`}
-            </div>
-        `}).join('');
+
+    list.innerHTML = `
+        <div style="margin-bottom:20px;">
+            <input type="text" placeholder="Search users by name or email..." 
+                oninput="filterAdminUsers(this.value)" 
+                style="width:100%; padding:12px; border-radius:10px; border:1px solid #eee;">
+        </div>
+        <div id="admin-users-grid" class="tile-list">
+            ${renderUserListHTML(allUsers)}
+        </div>
+    `;
 }
 
-window.updateUserRole = function (id, role) {
-    showToast(`Permission Level Changed to ${role.toUpperCase()} Admin for user!`);
-    // Logic to sync with Firebase if needed
+window.filterAdminUsers = function (val) {
+    const query = val.toLowerCase();
+    const filtered = AppState.users.filter(u =>
+        u.id !== AppState.user.id &&
+        (u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query))
+    );
+    const grid = document.getElementById('admin-users-grid');
+    if (grid) grid.innerHTML = renderUserListHTML(filtered);
+};
+
+function renderUserListHTML(users) {
+    return users.map(u => {
+        const roleColor = u.role === 'doctor' ? '#e23744' : (u.role === 'lab' ? '#3498db' : '#2ecc71');
+        return `
+            <div class="tile-item" style="padding:15px; margin-bottom:10px;">
+                <div style="display:flex; align-items:center; gap:15px; flex:1;">
+                    <div style="width:45px; height:45px; background:${roleColor}22; color:${roleColor}; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700;">
+                        ${u.name[0]}
+                    </div>
+                    <div>
+                        <h4 style="margin:0;">${u.name}</h4>
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:2px 0;">${u.email}</p>
+                        <span class="role-badge" style="background:${roleColor}11; color:${roleColor}; font-size:0.6rem; padding:2px 8px;">${u.role.toUpperCase()}</span>
+                    </div>
+                </div>
+                <div style="text-align:right; display:flex; flex-direction:column; gap:5px;">
+                    <select onchange="updateUserRole('${u.id}', this.value)" style="font-size:0.75rem; padding:5px; border-radius:8px; border:1px solid #eee;">
+                        <option value="user" ${!u.adminRole ? 'selected' : ''}>Standard User</option>
+                        <option value="finance" ${u.adminRole === 'finance' ? 'selected' : ''}>Finance Access</option>
+                        <option value="support" ${u.adminRole === 'support' ? 'selected' : ''}>Support Access</option>
+                    </select>
+                    <button class="btn-small" style="background:#f8f9fa; color:#333; border:1px solid #ddd;" onclick="manageUserStatus('${u.id}')">Manage</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.updateUserRole = async function (id, role) {
+    showToast(`Updating permissions for user...`);
+    try {
+        const adminRole = role === 'user' ? firebase.firestore.FieldValue.delete() : role;
+        await db.collection('users').doc(id).update({
+            adminRole: adminRole
+        });
+        showToast("Permissions updated successfully!", "success");
+    } catch (err) {
+        showToast("Update failed: " + err.message, "error");
+    }
+};
+
+window.manageUserStatus = function (id) {
+    const u = AppState.users.find(usr => usr.id === id);
+    if (!u) return;
+    showToast(`Managing ${u.name}... Profile view coming soon!`);
 };
 
 
@@ -2536,6 +2579,8 @@ window.showAdminTab = function (tab, event) {
     if (tab === 'financials') {
         renderAdminDashboard();
         renderAdminSettlementHistory();
+    } else if (tab === 'users') {
+        renderAdminUsers();
     }
 };
 
