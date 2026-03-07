@@ -2000,16 +2000,22 @@ window.openDetailsView = function (itemId, type) {
                     
                     ${item.locations && item.locations.length > 0 ? `
                         <div style="margin-top:15px; border-top:1px solid #ddd; padding-top:15px;">
-                            <h5 style="margin-bottom:10px; font-size:0.8rem; color:var(--text-muted);">Available Branches:</h5>
-                            ${item.locations.map(loc => `
+                            <h5 style="margin-bottom:10px; font-size:0.8rem; color:var(--text-muted);">Available Branches & Proximity:</h5>
+                            ${item.locations.map(loc => {
+            const d = (window.currentLat && window.currentLng) ? getHaversineDistance(window.currentLat, window.currentLng, loc.lat, loc.lng) : null;
+            return `
                                 <div style="font-size:0.8rem; margin-bottom:12px; display:flex; justify-content:space-between; align-items:flex-start;">
                                     <div>
-                                        <i class="fas fa-location-dot" style="color:var(--primary); width:15px;"></i> <strong>${loc.name}</strong><br>
+                                        <i class="fas fa-location-dot" style="color:var(--primary); width:15px;"></i> <strong>${loc.name}</strong> 
+                                        ${d ? `<span style="color:#2ecc71; font-weight:700; margin-left:5px;">(${d} km away)</span>` : ''}
+                                        <br>
                                         <span style="color:var(--text-muted); margin-left:15px;">${loc.timing} | ${loc.address}</span>
                                     </div>
-                                    ${loc.mapUrl ? `<button class="btn-small" style="padding:4px 8px; font-size:0.6rem; background:var(--primary); color:white; border:none;" onclick="window.open('${loc.mapUrl}', '_blank')"><i class="fas fa-location-arrow"></i> Navigate</button>` : ''}
-                                </div>
-                            `).join('')}
+                                    <div style="display:flex; gap:5px;">
+                                        ${loc.lat && loc.lng ? `<button class="btn-small" style="padding:4px 8px; font-size:0.6rem; background:var(--primary); color:white; border:none;" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${loc.lat},${loc.lng}', '_blank')"><i class="fas fa-location-arrow"></i> Navigate</button>` : ''}
+                                    </div>
+                                </div>`;
+        }).join('')}
                         </div>
                     ` : ''}
 
@@ -2032,6 +2038,18 @@ window.openDetailsView = function (itemId, type) {
     DOM.modal.classList.remove('hidden');
 };
 
+window.getHaversineDistance = function (lat1, lon1, lat2, lon2) {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 999;
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return parseFloat((R * c).toFixed(1));
+};
+
 window.simulateGPS = function () {
     showToast("Detecting real-time GPS coordinates...");
     const grid = document.getElementById('nearby-grid');
@@ -2044,10 +2062,11 @@ window.simulateGPS = function () {
 
     navigator.geolocation.getCurrentPosition(async (position) => {
         const { latitude, longitude } = position.coords;
-        console.log(`[GPS] Lat: ${latitude}, Lng: ${longitude}`);
+        window.currentLat = latitude;
+        window.currentLng = longitude;
+        console.log(`[GPS] Patient Lat: ${latitude}, Lng: ${longitude}`);
 
         if (locationText) {
-            // Reverse Geocoding would happen here typically. Simulation for now:
             locationText.innerText = "Current Location (Detected)";
         }
 
@@ -2056,30 +2075,31 @@ window.simulateGPS = function () {
 
         setTimeout(() => {
             const allProviders = [...AppState.doctors, ...AppState.labs];
-            // Sort by simulated distance based on lat/lng or just slice for now
-            const nearby = allProviders.slice(0, 4);
 
-            grid.innerHTML = nearby.map(item => {
-                const dist = (Math.random() * 2 + 0.5).toFixed(1); // Real calculation would use Haversine formula
-                return `
-                    <div class="tile-item" onclick="openDetailsView('${item.id}', '${item.type || 'doctors'}')" style="cursor:pointer;">
-                        <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">${item.name[0]}</div>
-                        <div class="tile-info">
-                            <h4>${item.name}</h4>
-                            <p><i class="fas fa-location-arrow"></i> ~${dist} km away • ${item.specialty || 'General'}</p>
-                        </div>
-                        <div style="text-align:right;">
-                            <span style="color:#2ecc71; font-weight:700; font-size:0.8rem;">OPEN</span>
-                            <p style="font-size:0.7rem; color:var(--text-muted);">₹${item.price}</p>
-                        </div>
+            // Calculate distance for all providers (including all their branches)
+            const ranked = allProviders.map(p => {
+                // Check primary location + all branches
+                const branchDistances = (p.locations || []).map(l => getHaversineDistance(latitude, longitude, l.lat, l.lng));
+                const primaryDist = getHaversineDistance(latitude, longitude, p.lat, p.lng);
+                const minDistance = Math.min(primaryDist, ...branchDistances);
+                return { ...p, distance: minDistance };
+            }).sort((a, b) => a.distance - b.distance).slice(0, 5);
+
+            grid.innerHTML = ranked.map(item => `
+                <div class="tile-item" onclick="openDetailsView('${item.id}', '${item.collection || (item.role === 'lab' ? 'labs' : 'doctors')}')" style="cursor:pointer;">
+                    <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">${item.name[0]}</div>
+                    <div class="tile-info">
+                        <h4>${item.name}</h4>
+                        <p><i class="fas fa-location-arrow"></i> ${item.distance === 999 ? 'Distance N/A' : `~${item.distance} km away`} • ${item.specialty || 'General'}</p>
                     </div>
-                `;
-            }).join('');
-            showToast("Nearby services updated based on your GPS!");
-        }, 1200);
-
-    }, (error) => {
-        showToast("Unable to retrieve location: " + error.message, "error");
+                    <div style="text-align:right;">
+                        <span style="color:#2ecc71; font-weight:700; font-size:0.8rem;">OPEN</span>
+                        <p style="font-size:0.7rem; color:var(--text-muted);">₹${item.price}</p>
+                    </div>
+                </div>
+            `).join('');
+            showToast("Nearby services updated based on your exact location!");
+        }, 800);
     });
 };
 
@@ -2095,11 +2115,13 @@ window.renderMultiClinics = function () {
     const fee = document.getElementById(`${prefix}-profile-fee`);
     const addr = document.getElementById(`${prefix}-profile-address`);
     const map = document.getElementById(`${prefix}-profile-map`);
+    const coords = document.getElementById(`${prefix}-profile-coords`);
 
     if (spec) spec.value = AppState.user.specialty || '';
     if (fee) fee.value = AppState.user.price || '';
     if (addr) addr.value = AppState.user.address || '';
     if (map) map.value = AppState.user.mapUrl || '';
+    if (coords) coords.value = (AppState.user.lat && AppState.user.lng) ? `${AppState.user.lat}, ${AppState.user.lng}` : '';
 
     const locations = AppState.user.locations || [];
     if (locations.length === 0) {
@@ -2140,12 +2162,12 @@ window.addClinicPrompt = function () {
             </div>
 
             <div class="input-group" style="margin-top:15px;">
-                <label style="font-weight:600;">Google Maps URL (Optional)</label>
+                <label style="font-weight:600;">GPS Coordinates (Lat/Lng)</label>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="new-loc-map" placeholder="Paste link from Google Maps" style="flex:1; padding:12px; border:1.5px solid #eee; border-radius:12px;">
-                    <button class="btn-small" style="padding:0 15px; background:var(--bg-light); color:var(--text-main); border:1.5px solid #eee;" onclick="window.open('https://www.google.com/maps/search/' + encodeURIComponent(document.getElementById('new-loc-address').value || 'India'), '_blank')">Find</button>
+                    <input type="text" id="new-loc-coords" placeholder="Auto-fills via Pin button" readonly style="flex:1; padding:12px; border:1.5px solid #eee; border-radius:12px; background:#f5f5f5;">
+                    <button class="btn-small" style="padding:0 15px; background:var(--primary); color:white; border:none;" onclick="pinCurrentLocation('new-loc-coords')"><i class="fas fa-crosshairs"></i> Pin</button>
                 </div>
-                <p style="font-size:0.7rem; color:var(--text-muted); margin-top:5px;"><i class="fas fa-circle-info"></i> Search your branch on Google Maps, click Share, and paste the link here.</p>
+                <p style="font-size:0.65rem; color:var(--text-muted); margin-top:5px;">Click Pin while standing at this clinic location.</p>
             </div>
 
             <button class="btn-signup" style="width:100%; margin-top:25px; background:var(--primary); box-shadow:0 4px 15px rgba(226, 55, 68, 0.2);" onclick="saveNewClinicLocation()">Save Branch Location</button>
@@ -2154,15 +2176,25 @@ window.addClinicPrompt = function () {
     DOM.modal.classList.remove('hidden');
 };
 
+window.pinCurrentLocation = function (targetId) {
+    if (!navigator.geolocation) return showToast("GPS not supported", "error");
+    showToast("Fetching location...");
+    navigator.geolocation.getCurrentPosition(pos => {
+        document.getElementById(targetId).value = `${pos.coords.latitude}, ${pos.coords.longitude}`;
+        showToast("Location Pinned!", "success");
+    }, err => showToast("Failed to fetch GPS", "error"));
+};
+
 window.saveNewClinicLocation = async function () {
     const name = document.getElementById('new-loc-name').value;
     const timing = document.getElementById('new-loc-timing').value;
     const address = document.getElementById('new-loc-address').value;
-    const mapUrl = document.getElementById('new-loc-map').value;
+    const coords = document.getElementById('new-loc-coords').value;
+    const [lat, lng] = coords.split(',').map(s => parseFloat(s.trim()));
 
     if (!name || !address) return showToast("Name and Address are required", "warning");
 
-    const newLoc = { name, timing, address, mapUrl, createdAt: new Date() };
+    const newLoc = { name, timing, address, lat, lng, createdAt: new Date() };
     const locations = AppState.user.locations || [];
     locations.push(newLoc);
 
@@ -2233,6 +2265,9 @@ window.saveDoctorProfile = async function () {
     const mapUrl = document.getElementById('doc-profile-map').value;
     const photoFile = document.getElementById('doctor-photo-input').files[0];
 
+    const coords = document.getElementById('doc-profile-coords').value;
+    const [lat, lng] = coords ? coords.split(',').map(s => parseFloat(s.trim())) : [null, null];
+
     try {
         let photoURL = AppState.user.image;
         if (photoFile) {
@@ -2240,15 +2275,18 @@ window.saveDoctorProfile = async function () {
             photoURL = await uploadFile(photoFile, `doctors/${AppState.user.id}`);
         }
 
-        await db.collection('doctors').doc(AppState.user.id).update({
+        const updates = {
             specialty: spec,
             price: fee,
             address: address,
             mapUrl: mapUrl,
-            image: photoURL
-        });
+            image: photoURL,
+            lat, lng
+        };
 
-        AppState.user = { ...AppState.user, specialty: spec, price: fee, address, mapUrl, image: photoURL };
+        await db.collection('doctors').doc(AppState.user.id).update(updates);
+        AppState.user = { ...AppState.user, ...updates };
+
         showToast("Clinic Profile Updated!");
         refreshActiveDashboard();
     } catch (err) {
@@ -2264,6 +2302,9 @@ window.saveLabProfile = async function () {
     const mapUrl = document.getElementById('lab-profile-map').value;
     const photoFile = document.getElementById('lab-profile-image').files[0];
 
+    const coords = document.getElementById('lab-profile-coords').value;
+    const [lat, lng] = coords ? coords.split(',').map(s => parseFloat(s.trim())) : [null, null];
+
     try {
         let photoURL = AppState.user.image;
         if (photoFile) {
@@ -2271,15 +2312,18 @@ window.saveLabProfile = async function () {
             photoURL = await uploadFile(photoFile, `labs/${AppState.user.id}`);
         }
 
-        await db.collection('labs').doc(AppState.user.id).update({
+        const updates = {
             specialty: spec,
             price: fee,
             address: address,
             mapUrl: mapUrl,
-            image: photoURL
-        });
+            image: photoURL,
+            lat, lng
+        };
 
-        AppState.user = { ...AppState.user, specialty: spec, price: fee, address, mapUrl, image: photoURL };
+        await db.collection('labs').doc(AppState.user.id).update(updates);
+        AppState.user = { ...AppState.user, ...updates };
+
         showToast("Lab Profile Updated!");
         refreshActiveDashboard();
     } catch (err) {
