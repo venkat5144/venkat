@@ -3074,49 +3074,49 @@ window.showAdminTab = function (tab, event) {
     if (tab === 'financials') renderAdminFinancials();
 };
 
-window.renderAdminFinancials = async function () {
+window.renderAdminFinancials = function () {
     const list = document.getElementById('admin-payout-list');
     if (!list) return;
 
-    list.innerHTML = `<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Analyzing ledger...</p>`;
-
     try {
-        const snap = await db.collection('appointments')
-            .where('paymentStatus', 'in', ['Paid', 'Refunded'])
-            .orderBy('createdAt', 'desc')
-            .limit(50)
-            .get();
+        const transactions = (AppState.appointments || [])
+            .filter(a => ['Paid', 'Refunded'].includes(a.paymentStatus))
+            .sort((a, b) => {
+                const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt || 0);
+                const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : (b.createdAt || 0);
+                return dateB - dateA;
+            })
+            .slice(0, 50);
 
-        if (snap.empty) {
+        if (transactions.length === 0) {
             list.innerHTML = `<p style="padding:40px; text-align:center; color:var(--text-muted);">No financial transactions recorded.</p>`;
             return;
         }
 
-        list.innerHTML = snap.docs.map(doc => {
-            const a = doc.data();
+        list.innerHTML = transactions.map(a => {
             const statusColor = a.payoutStatus === 'Wallet' ? '#2ecc71' : (a.payoutStatus === 'Escrow' ? '#e67e22' : '#c00');
+            const refId = a.id ? a.id.slice(0, 8).toUpperCase() : 'N/A';
             return `
-                <div class="tile-item" style="font-size:0.85rem; border-left:4px solid ${statusColor}; border-radius:12px; margin-bottom:12px; padding:15px; background:white; box-shadow:0 2px 10px rgba(0,0,0,0.02);">
+                <div class="tile-item" style="font-size:0.85rem; border-left:4px solid ${statusColor}; border-radius:12px; margin-bottom:12px; padding:15px; background:white; box-shadow:0 2px 10px rgba(0,0,0,0.02); display:flex; align-items:center;">
                     <div style="flex:1;">
-                        <h4 style="margin:0; font-weight:600;">${a.targetName} <span style="font-weight:400; font-size:0.7rem; color:var(--text-muted);">| Ref: ${doc.id.slice(0, 8)}</span></h4>
-                        <p style="margin:4px 0; color:var(--text-muted);">Patient: ${a.patientName} • Total: ₹${a.price * 1.18}</p>
-                        <p style="font-size:0.65rem; color:#666;">Transaction Mode: ${a.paymentMode || 'Online'}</p>
+                        <h4 style="margin:0; font-weight:600;">${a.targetName || 'Provider'} <span style="font-weight:400; font-size:0.7rem; color:var(--text-muted);">| Ref: ${refId}</span></h4>
+                        <p style="margin:4px 0; color:var(--text-muted);">Patient: ${a.patientName} • Total: ₹${a.price}</p>
+                        <p style="font-size:0.65rem; color:#666;">Status: ${a.paymentStatus} • ${a.type?.toUpperCase()}</p>
                     </div>
                     <div style="text-align:right;">
-                        <div style="font-weight:700; color:var(--primary); font-size:1rem;">+ ₹${a.commission} Fee</div>
+                        <div style="font-weight:700; color:var(--primary); font-size:1rem;">+ ₹${a.commission || 0} Fee</div>
                         <div style="margin-top:8px;">
                             <span style="font-size:0.6rem; padding:3px 10px; border-radius:15px; background:${statusColor}11; color:${statusColor}; border:1px solid ${statusColor}22; font-weight:600;">
-                               <i class="fas fa-${a.payoutStatus === 'Wallet' ? 'check-double' : 'clock'}"></i> ${a.payoutStatus.toUpperCase()}
+                               <i class="fas fa-${a.payoutStatus === 'Wallet' ? 'check-double' : 'clock'}"></i> ${(a.payoutStatus || 'Pending').toUpperCase()}
                             </span>
                         </div>
                     </div>
                 </div>
             `;
         }).join('');
-
     } catch (err) {
-        console.error("Financials Error:", err);
-        list.innerHTML = `<p style="color:red; text-align:center;">Ledger Error: ${err.message}</p>`;
+        console.error("Financials UI Error:", err);
+        list.innerHTML = `<p style="padding:20px; color:var(--primary); text-align:center;">Failed to render ledger data.</p>`;
     }
 };
 
