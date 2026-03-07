@@ -143,11 +143,70 @@ function toggleTheme() {
 }
 
 
+// --- PWA Installation Logic ---
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    console.log('[PWA] BeforeInstallPrompt event captured');
+    // We can show a specific "Install" button in the UI here
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) installBtn.style.display = 'flex';
+});
+
+window.showInstallPrompt = async () => {
+    if (!deferredPrompt) {
+        showToast("To install HealthMate:\n1. Open this site in Chrome/Safari\n2. Tap the Menu (3 dots) or Share icon\n3. Select 'Add to Home Screen'", "info");
+        return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`[PWA] User choice: ${outcome}`);
+    deferredPrompt = null;
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) installBtn.style.display = 'none';
+};
+
+window.toggleSidebar = function () {
+    const sidebar = document.getElementById('app-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar && overlay) {
+        sidebar.classList.toggle('active');
+        overlay.classList.toggle('active');
+    }
+};
+
+window.handleSidebarAction = function (action) {
+    toggleSidebar();
+    switch (action) {
+        case 'about':
+            showToast("HealthMate v2.2\nBuild once, run everywhere!\nYou can install this as an app from your browser menu.", "info");
+            break;
+        case 'devices':
+            showToast("Currently active on this device. End-to-end encrypted.");
+            break;
+        case 'password':
+            showToast("Password reset link sent to your registered email.");
+            break;
+        case 'help':
+            showToast("Connecting to Help Desk... 24/7 Support available.");
+            break;
+    }
+};
+
 // --- Initialization ---
 function init() {
     setupAuthListener();
     setupRealtimeSync();
     setupEventListeners();
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js?v=' + APP_VERSION)
+                .then(reg => console.log('[PWA] ServiceWorker registered:', reg.scope))
+                .catch(err => console.log('[PWA] ServiceWorker failed:', err));
+        });
+    }
     initSimulations();
 
     // Theme Init

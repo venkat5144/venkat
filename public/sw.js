@@ -3,7 +3,8 @@ const assets = [
     '/',
     '/index.html',
     '/style.css',
-    '/script.js'
+    '/script.js',
+    '/assets/healthmate-logo.png'
 ];
 
 self.addEventListener('install', e => {

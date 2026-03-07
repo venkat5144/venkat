@@ -1,15 +1,28 @@
 {
-    "name": "HealthMate Pro",
+    "name": "HealthMate Digital Clinic",
     "short_name": "HealthMate",
-    "start_url": "/index.html",
+    "description": "Your AI-powered digital clinic and lab assistant.",
+    "start_url": ".",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#E23744",
+    "orientation": "portrait",
     "icons": [
         {
-            "src": "https://cdn-icons-png.flaticon.com/512/2966/2966327.png",
+            "src": "assets/healthmate-logo.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "assets/healthmate-logo.png",
             "sizes": "512x512",
             "type": "image/png"
+        },
+        {
+            "src": "assets/healthmate-logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
         }
     ]
 }
