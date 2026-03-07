@@ -2075,30 +2075,46 @@ window.simulateGPS = function () {
 
         setTimeout(() => {
             const allProviders = [...AppState.doctors, ...AppState.labs];
+            const MAX_NEARBY_KM = 10; // Only show within 10km
 
             // Calculate distance for all providers (including all their branches)
-            const ranked = allProviders.map(p => {
+            let ranked = allProviders.map(p => {
                 // Check primary location + all branches
-                const branchDistances = (p.locations || []).map(l => getHaversineDistance(latitude, longitude, l.lat, l.lng));
+                const branchDistances = (p.locations || []).map(l => getHaversineDistance(latitude, longitude, l.lat, l.lng)).filter(d => d < 999);
                 const primaryDist = getHaversineDistance(latitude, longitude, p.lat, p.lng);
-                const minDistance = Math.min(primaryDist, ...branchDistances);
-                return { ...p, distance: minDistance };
-            }).sort((a, b) => a.distance - b.distance).slice(0, 5);
 
-            grid.innerHTML = ranked.map(item => `
-                <div class="tile-item" onclick="openDetailsView('${item.id}', '${item.collection || (item.role === 'lab' ? 'labs' : 'doctors')}')" style="cursor:pointer;">
-                    <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">${item.name[0]}</div>
-                    <div class="tile-info">
-                        <h4>${item.name}</h4>
-                        <p><i class="fas fa-location-arrow"></i> ${item.distance === 999 ? 'Distance N/A' : `~${item.distance} km away`} • ${item.specialty || 'General'}</p>
+                const validDists = [primaryDist, ...branchDistances].filter(d => d < 999);
+                const minDistance = validDists.length > 0 ? Math.min(...validDists) : 999;
+
+                return { ...p, distance: minDistance };
+            })
+                .filter(p => p.distance <= MAX_NEARBY_KM) // PROXIMITY FILTER
+                .sort((a, b) => a.distance - b.distance);
+
+            if (ranked.length === 0) {
+                grid.innerHTML = `
+                    <div style="text-align:center; padding:40px; width:100%; color:var(--text-muted);">
+                        <i class="fas fa-map-location-dot" style="font-size:3rem; margin-bottom:15px; opacity:0.3;"></i>
+                        <p>No doctors or labs found within ${MAX_NEARBY_KM}km of your location.</p>
+                        <button class="btn-small" style="margin-top:15px; background:none; border:1px solid var(--primary); color:var(--primary);" onclick="renderGrid()">Show All Providers</button>
                     </div>
-                    <div style="text-align:right;">
-                        <span style="color:#2ecc71; font-weight:700; font-size:0.8rem;">OPEN</span>
-                        <p style="font-size:0.7rem; color:var(--text-muted);">₹${item.price}</p>
+                `;
+            } else {
+                grid.innerHTML = ranked.map(item => `
+                    <div class="tile-item" onclick="openDetailsView('${item.id}', '${item.collection || (item.role === 'lab' ? 'labs' : 'doctors')}')" style="cursor:pointer;">
+                        <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">${item.name[0]}</div>
+                        <div class="tile-info">
+                            <h4>${item.name}</h4>
+                            <p><i class="fas fa-location-arrow"></i> ~${item.distance} km away • ${item.specialty || 'General'}</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="color:#2ecc71; font-weight:700; font-size:0.8rem;">OPEN</span>
+                            <p style="font-size:0.7rem; color:var(--text-muted);">₹${item.price}</p>
+                        </div>
                     </div>
-                </div>
-            `).join('');
-            showToast("Nearby services updated based on your exact location!");
+                `).join('');
+                showToast(`Found ${ranked.length} services near you!`);
+            }
         }, 800);
     });
 };
