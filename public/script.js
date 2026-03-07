@@ -19,6 +19,89 @@ const RAZORPAY_CONFIG = {
     description: "Doctor Consultation / Lab Test"
 };
 
+
+// --- Wallet & Escrow Helpers ---
+async function ensureWalletExists(uid) {
+    const ref = db.collection('wallets').doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) {
+        await ref.set({
+            uid,
+            availableBalance: 0,
+            pendingEscrow: 0,
+            totalEarnings: 0,
+            payoutsProcessed: 0,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    }
+}
+
+async function creditEscrow(providerId, amount, commission) {
+    await ensureWalletExists(providerId);
+    const net = amount - commission;
+    await db.collection('wallets').doc(providerId).update({
+        pendingEscrow: firebase.firestore.FieldValue.increment(net),
+        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+    });
+}
+
+async function releaseEscrowToWallet(appId) {
+    const appSnap = await db.collection('appointments').doc(appId).get();
+    const app = appSnap.data();
+    if (!app || app.payoutStatus !== 'Escrow') return;
+
+    const commissionRate = (AppState.user.commissionRate || 20) / 100;
+    const gross = parseInt(app.price) || 0;
+    const commission = Math.floor(gross * commissionRate);
+    const net = gross - commission;
+
+    const batch = db.batch();
+    batch.update(db.collection('appointments').doc(appId), {
+        payoutStatus: 'Wallet',
+        completedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    batch.update(db.collection('wallets').doc(app.targetId), {
+        pendingEscrow: firebase.firestore.FieldValue.increment(-net),
+        availableBalance: firebase.firestore.FieldValue.increment(net),
+        totalEarnings: firebase.firestore.FieldValue.increment(net)
+    });
+
+    batch.set(db.collection('wallet_transactions').doc(), {
+        uid: app.targetId,
+        appId: appId,
+        type: 'credit',
+        amount: net,
+        description: `Booking Release: ${app.patientName}`,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await batch.commit();
+}
+
+async function handleRefund(appId) {
+    const appSnap = await db.collection('appointments').doc(appId).get();
+    const app = appSnap.data();
+    if (!app || app.paymentStatus !== 'Paid') return;
+
+    const net = (parseInt(app.price) || 0) * (1 - (AppState.user.commissionRate || 20) / 100);
+
+    const batch = db.batch();
+    batch.update(db.collection('appointments').doc(appId), {
+        payoutStatus: 'Refunded',
+        paymentStatus: 'Refunded'
+    });
+
+    if (app.payoutStatus === 'Escrow') {
+        batch.update(db.collection('wallets').doc(app.targetId), {
+            pendingEscrow: firebase.firestore.FieldValue.increment(-net)
+        });
+    }
+
+    await batch.commit();
+    showToast("Refund processed successfully.");
+}
+
 // --- Helper: File Upload ---
 
 async function uploadFile(file, path) {
@@ -1126,7 +1209,7 @@ window.confirmBooking = async function (itemId, type, paymentData = { status: 'P
         symptoms: symptoms,
         preReportUrl: AppState.bookingReportUrl || null,
         collectionType: AppState.selectedCollection || 'visit',
-        payoutStatus: 'Pending',
+        payoutStatus: paymentData.status === 'Paid' ? 'Escrow' : 'Pending',
         tokenNumber: token,
         queueAhead: ahead,
         date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
@@ -1136,8 +1219,10 @@ window.confirmBooking = async function (itemId, type, paymentData = { status: 'P
     try {
         const docRef = await db.collection('appointments').add(appointment);
 
-        // Log Transaction for Paid Bookings
+        // Log Transaction & Update Escrow Wallet
         if (paymentData.status === 'Paid') {
+            await creditEscrow(itemId, appointment.price, appointment.commission);
+
             await db.collection('transactions').add({
                 bookingId: docRef.id,
                 transactionId: paymentData.transactionId,
@@ -1708,10 +1793,7 @@ window.viewPatientRecords = async function (patientId, patientName) {
 window.showDoctorTab = function (tab, event) {
     const targetId = `doctor-${tab}-tab`;
     const targetTab = document.getElementById(targetId);
-    if (!targetTab) {
-        console.warn(`Tab ${targetId} not found!`);
-        return;
-    }
+    if (!targetTab) return;
 
     document.querySelectorAll('#doctor-view .doctor-tab').forEach(el => el.classList.add('hidden'));
     targetTab.classList.remove('hidden');
@@ -1720,61 +1802,155 @@ window.showDoctorTab = function (tab, event) {
     if (event && event.currentTarget) event.currentTarget.classList.add('active');
 
     if (tab === 'summary') renderDoctorDashboard();
-    if (tab === 'statements') renderDoctorStatements();
+    if (tab === 'wallet') renderWallet('doctor');
 };
 
-window.renderDoctorStatements = async function () {
-    const list = document.getElementById('doctor-statements-list');
-    if (!list) return;
+window.showLabTab = function (tab, event) {
+    const targetId = `lab-${tab}-tab`;
+    const targetTab = document.getElementById(targetId);
+    if (!targetTab) return;
 
-    list.innerHTML = `<p style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading statements...</p>`;
+    document.querySelectorAll('#lab-view .doctor-tab').forEach(el => el.classList.add('hidden'));
+    targetTab.classList.remove('hidden');
+
+    document.querySelectorAll('#lab-view .menu-item').forEach(btn => btn.classList.remove('active'));
+    if (event && event.currentTarget) event.currentTarget.classList.add('active');
+
+    if (tab === 'summary') renderLabDashboard();
+    if (tab === 'wallet') renderWallet('lab');
+};
+
+window.renderWallet = async function (role) {
+    const containerId = `${role}-wallet-container`;
+    const historyId = `${role}-wallet-history`;
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = `<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Securing wallet access...</p>`;
 
     try {
-        const snap = await db.collection('settlements')
-            .where('providerId', '==', AppState.user.id)
-            .orderBy('createdAt', 'desc')
-            .get();
+        const walletSnap = await db.collection('wallets').doc(AppState.user.id).get();
+        const wallet = walletSnap.data() || { availableBalance: 0, pendingEscrow: 0, totalEarnings: 0 };
 
-        if (snap.empty) {
-            list.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No settlement records found yet.</p>`;
-            return;
+        container.innerHTML = `
+            <div class="stats-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; margin-bottom:30px;">
+                <div class="admin-stat-card" style="background:var(--primary); color:white; border:none;">
+                    <i class="fas fa-coins" style="font-size:1.5rem; margin-bottom:10px; opacity:0.8;"></i>
+                    <h2 style="color:white; margin:5px 0;">₹${wallet.availableBalance}</h2>
+                    <p style="font-size:0.8rem; opacity:0.9;">Withdrawable Balance</p>
+                </div>
+                <div class="admin-stat-card">
+                    <i class="fas fa-shield-halved" style="color:#e67e22; font-size:1.5rem; margin-bottom:10px;"></i>
+                    <h2 style="margin:5px 0;">₹${wallet.pendingEscrow}</h2>
+                    <p style="color:var(--text-muted); font-size:0.8rem;">Funds in Escrow</p>
+                </div>
+                <div class="admin-stat-card">
+                    <i class="fas fa-hand-holding-dollar" style="color:#2ecc71; font-size:1.5rem; margin-bottom:10px;"></i>
+                    <h2 style="margin:5px 0; color:#2ecc71;">₹${wallet.totalEarnings}</h2>
+                    <p style="color:var(--text-muted); font-size:0.8rem;">Lifetime Revenue</p>
+                </div>
+            </div>
+        `;
+
+        // Render Transaction History
+        const historyList = document.getElementById(historyId);
+        if (historyList) {
+            const transSnap = await db.collection('wallet_transactions')
+                .where('uid', '==', AppState.user.id)
+                .orderBy('createdAt', 'desc')
+                .limit(20)
+                .get();
+
+            if (transSnap.empty) {
+                historyList.innerHTML = `<p style="text-align:center; padding:40px; color:var(--text-muted);">No wallet activity found yet.</p>`;
+            } else {
+                historyList.innerHTML = transSnap.docs.map(doc => {
+                    const t = doc.data();
+                    const dateStr = t.createdAt ? t.createdAt.toDate().toLocaleDateString() : 'Recent';
+                    return `
+                        <div class="tile-item" style="padding:12px; margin-bottom:8px; border:1px solid #f5f5f5;">
+                            <div style="width:36px; height:36px; background:${t.type === 'credit' ? '#e8f5e9' : '#fee'}; color:${t.type === 'credit' ? '#2ecc71' : '#c00'}; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                                <i class="fas fa-${t.type === 'credit' ? 'arrow-up' : 'arrow-down'}"></i>
+                            </div>
+                            <div style="flex:1; margin-left:15px;">
+                                <h4 style="margin:0; font-size:0.9rem;">${t.description}</h4>
+                                <p style="font-size:0.75rem; color:var(--text-muted); margin:0;">${dateStr} • ID: ${doc.id.slice(0, 8).toUpperCase()}</p>
+                            </div>
+                            <h4 style="color:${t.type === 'credit' ? '#2ecc71' : '#c00'}; margin:0;">${t.type === 'credit' ? '+' : '-'} ₹${t.amount}</h4>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+    } catch (err) {
+        container.innerHTML = `<p style="color:red; text-align:center;">Wallet Sync Error: ${err.message}</p>`;
+    }
+};
+
+window.requestPayoutPrompt = function () {
+    DOM.modalBody.innerHTML = `
+        <div style="text-align:center; padding:20px;">
+            <i class="fas fa-building-columns" style="font-size:3rem; color:var(--primary); margin-bottom:20px;"></i>
+            <h2>Request Withdrawal</h2>
+            <p style="color:var(--text-muted); margin-bottom:20px;">Funds will be transferred to your linked bank account via Razorpay X.</p>
+            
+            <div class="input-group" style="text-align:left;">
+                <label>Amount (₹)</label>
+                <input type="number" id="payout-amount" placeholder="Min. ₹500" style="width:100%; border:1.5px solid #eee; padding:12px; border-radius:12px;">
+            </div>
+            
+            <div style="background:#f9f9f9; padding:15px; border-radius:12px; margin-top:15px; text-align:left;">
+                <p style="font-size:0.8rem; color:var(--text-muted); margin:0;"><i class="fas fa-shield-check"></i> Standard T+2 settlement applies. Service fee: 2%</p>
+            </div>
+            
+            <button class="btn-signup" style="width:100%; margin-top:20px;" onclick="confirmPayoutRequest()">Proceed with Withdrawal</button>
+        </div>
+    `;
+    DOM.modal.classList.remove('hidden');
+};
+
+window.confirmPayoutRequest = async function () {
+    const amount = parseInt(document.getElementById('payout-amount').value);
+    if (!amount || amount < 500) return showToast("Minimum withdrawal is ₹500", "warning");
+
+    showToast("Validating balance...");
+    try {
+        const walletRef = db.collection('wallets').doc(AppState.user.id);
+        const walletSnap = await walletRef.get();
+        const wallet = walletSnap.data();
+
+        if (!wallet || wallet.availableBalance < amount) {
+            return showToast("Insufficient Balance", "error");
         }
 
-        list.innerHTML = snap.docs.map(doc => {
-            const s = doc.data();
-            const date = s.createdAt?.toDate().toLocaleDateString() || 'N/A';
-            const payoutDate = s.scheduledPayoutDate?.toDate().toLocaleDateString() || 'Processing';
-            const isReady = s.scheduledPayoutDate?.toDate() <= new Date();
+        const batch = db.batch();
+        batch.update(walletRef, {
+            availableBalance: firebase.firestore.FieldValue.increment(-amount),
+            payoutsProcessed: firebase.firestore.FieldValue.increment(amount)
+        });
 
-            return `
-                <div class="tile-item" style="flex-direction: column; align-items: flex-start; gap: 10px;">
-                    <div style="display: flex; justify-content: space-between; width: 100%;">
-                        <span style="font-weight: 700; color: var(--text-muted);">Ref: ${doc.id.slice(0, 8).toUpperCase()}</span>
-                        <span class="tile-badge status-${isReady ? 'approved' : 'pending'}">${isReady ? 'PAID' : 'UPCOMING'}</span>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; width: 100%; border-top: 1px dashed #eee; padding-top: 10px;">
-                        <div>
-                            <p style="font-size: 0.7rem; color: var(--text-muted); margin: 0;">Gross</p>
-                            <p style="font-weight: 600; margin: 2px 0;">₹${s.grossAmount}</p>
-                        </div>
-                        <div>
-                            <p style="font-size: 0.7rem; color: var(--primary); margin: 0;">Platform Fee</p>
-                            <p style="font-weight: 600; margin: 2px 0; color: var(--primary);">₹${s.commission}</p>
-                        </div>
-                        <div>
-                            <p style="font-size: 0.7rem; color: #2ecc71; margin: 0;">Net Received</p>
-                            <p style="font-weight: 700; margin: 2px 0; color: #2ecc71;">₹${s.netAmount}</p>
-                        </div>
-                    </div>
-                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">
-                        <i class="fas fa-calendar-alt"></i> Settled on: ${date} | <i class="fas fa-money-bill-transfer"></i> Payout Date: ${payoutDate}
-                    </p>
-                </div>
-            `;
-        }).join('');
+        batch.set(db.collection('payout_requests').doc(), {
+            uid: AppState.user.id,
+            name: AppState.user.name,
+            amount: amount,
+            status: 'pending',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        batch.set(db.collection('wallet_transactions').doc(), {
+            uid: AppState.user.id,
+            type: 'debit',
+            amount: amount,
+            description: `Payout Withdrawal Request`,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await batch.commit();
+        showToast("Payout request submitted successfully!", "success");
+        DOM.modal.classList.add('hidden');
+        renderWallet(AppState.user.role === 'doctor' ? 'doctor' : 'lab');
     } catch (err) {
-        console.error("Statement fetch failed:", err);
-        list.innerHTML = `<p style="text-align: center; padding: 20px; color: #e74c3c;">Failed to load statements.</p>`;
+        showToast("Request failed: " + err.message, "error");
     }
 };
 
@@ -2211,10 +2387,41 @@ window.removeLabTest = async function (index) {
 };
 
 function renderAdminDashboard() {
-    // Existing overview, verifications, and financials rendering
     const list = document.getElementById('admin-verification-list');
     const payoutList = document.getElementById('admin-payout-list');
     const statsGrid = document.getElementById('admin-stats-grid');
+
+    // Real-time Dashboard Summary Update
+    try {
+        const paidApps = AppState.appointments.filter(a => a.paymentStatus === 'Paid' || a.paymentStatus === 'Refunded');
+        const grossRevenue = paidApps.reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
+        const platformEarnings = paidApps.filter(a => a.paymentStatus === 'Paid').reduce((sum, a) => sum + (parseInt(a.commission) || 0), 0);
+        const totalEscrowHeld = AppState.appointments.filter(a => a.payoutStatus === 'Escrow').reduce((sum, a) => sum + (parseInt(a.price) - parseInt(a.commission) || 0), 0);
+
+        statsGrid.innerHTML = `
+            <div class="admin-stat-card">
+                <div style="display:flex; justify-content:space-between;">
+                    <h3>₹${grossRevenue}</h3>
+                    <i class="fas fa-hand-holding-dollar" style="color:var(--primary);"></i>
+                </div>
+                <p>Gross Marketplace Sales</p>
+            </div>
+            <div class="admin-stat-card">
+                <div style="display:flex; justify-content:space-between;">
+                    <h3 style="color:#2ecc71;">₹${platformEarnings}</h3>
+                    <i class="fas fa-piggy-bank" style="color:#2ecc71;"></i>
+                </div>
+                <p>Total Platform Income</p>
+            </div>
+            <div class="admin-stat-card">
+                <div style="display:flex; justify-content:space-between;">
+                    <h3 style="color:#3498db;">₹${totalEscrowHeld}</h3>
+                    <i class="fas fa-lock" style="color:#3498db;"></i>
+                </div>
+                <p>Funds held in Escrow</p>
+            </div>
+        `;
+    } catch (e) { console.error("Admin counts fail:", e); }
 
     // Verifications
     const pendingWithRole = [
@@ -2692,68 +2899,80 @@ window.manageUserStatus = function (id) {
 window.showAdminTab = function (tab, event) {
     const targetId = `admin-${tab}-tab`;
     const targetTab = document.getElementById(targetId);
-    if (!targetTab) return console.warn(`Admin tab ${tab} not found`);
+    if (!targetTab) return;
 
     document.querySelectorAll('#admin-view .doctor-tab').forEach(el => el.classList.add('hidden'));
     targetTab.classList.remove('hidden');
-    document.querySelectorAll('#admin-view .menu-item').forEach(btn => btn.classList.remove('active'));
-    if (event) event.currentTarget.classList.add('active');
 
-    // Render specific tab content if needed
-    if (tab === 'financials') {
-        renderAdminDashboard();
-        renderAdminSettlementHistory();
-    } else if (tab === 'users') {
-        renderAdminUsers();
-    }
+    document.querySelectorAll('#admin-view .menu-item').forEach(btn => btn.classList.remove('active'));
+    if (event && event.currentTarget) event.currentTarget.classList.add('active');
+
+    if (tab === 'overview') renderAdminDashboard();
+    if (tab === 'verifications') renderVerifications();
+    if (tab === 'users') renderAdminUsers();
+    if (tab === 'financials') renderAdminFinancials();
 };
 
-window.renderAdminSettlementHistory = async function () {
-    const list = document.getElementById('admin-settlement-history-list');
+window.renderAdminFinancials = async function () {
+    const list = document.getElementById('admin-payout-list');
     if (!list) return;
 
+    list.innerHTML = `<p style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Analyzing ledger...</p>`;
+
     try {
-        const snap = await db.collection('settlements').orderBy('createdAt', 'desc').limit(20).get();
+        const snap = await db.collection('appointments')
+            .where('paymentStatus', 'in', ['Paid', 'Refunded'])
+            .orderBy('createdAt', 'desc')
+            .limit(50)
+            .get();
+
         if (snap.empty) {
-            list.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--text-muted);">No settlement logs found.</p>`;
+            list.innerHTML = `<p style="padding:40px; text-align:center; color:var(--text-muted);">No financial transactions recorded.</p>`;
             return;
         }
 
         list.innerHTML = snap.docs.map(doc => {
-            const s = doc.data();
-            const provider = [...AppState.doctors, ...AppState.labs].find(p => p.id === s.providerId);
-            const date = s.createdAt?.toDate().toLocaleDateString() || 'N/A';
-            const isReady = s.scheduledPayoutDate?.toDate() <= new Date();
-
+            const a = doc.data();
+            const statusColor = a.payoutStatus === 'Wallet' ? '#2ecc71' : (a.payoutStatus === 'Escrow' ? '#e67e22' : '#c00');
             return `
-                <div class="tile-item" style="padding: 12px; font-size: 0.85rem;">
-                    <div class="tile-info">
-                        <h4 style="font-size: 0.9rem;">${provider?.name || 'Unknown Provider'}</h4>
-                        <p>${date} • ${s.appointmentCount} bookings • <span style="color: ${isReady ? '#2ecc71' : '#e67e22'}; font-weight: 600;">${isReady ? 'Completed' : 'Scheduled: ' + s.scheduledPayoutDate?.toDate().toLocaleDateString()}</span></p>
+                <div class="tile-item" style="font-size:0.85rem; border-left:4px solid ${statusColor}; border-radius:12px; margin-bottom:12px; padding:15px; background:white; box-shadow:0 2px 10px rgba(0,0,0,0.02);">
+                    <div style="flex:1;">
+                        <h4 style="margin:0; font-weight:600;">${a.targetName} <span style="font-weight:400; font-size:0.7rem; color:var(--text-muted);">| Ref: ${doc.id.slice(0, 8)}</span></h4>
+                        <p style="margin:4px 0; color:var(--text-muted);">Patient: ${a.patientName} • Total: ₹${a.price * 1.18}</p>
+                        <p style="font-size:0.65rem; color:#666;">Transaction Mode: ${a.paymentMode || 'Online'}</p>
                     </div>
-                    <div style="text-align: right;">
-                        <p style="font-weight: 700; margin: 0;">₹${s.netAmount}</p>
-                        <p style="font-size: 0.7rem; color: var(--text-muted); margin: 0;">Fee: ₹${s.commission}</p>
+                    <div style="text-align:right;">
+                        <div style="font-weight:700; color:var(--primary); font-size:1rem;">+ ₹${a.commission} Fee</div>
+                        <div style="margin-top:8px;">
+                            <span style="font-size:0.6rem; padding:3px 10px; border-radius:15px; background:${statusColor}11; color:${statusColor}; border:1px solid ${statusColor}22; font-weight:600;">
+                               <i class="fas fa-${a.payoutStatus === 'Wallet' ? 'check-double' : 'clock'}"></i> ${a.payoutStatus.toUpperCase()}
+                            </span>
+                        </div>
                     </div>
                 </div>
             `;
         }).join('');
+
     } catch (err) {
-        list.innerHTML = `<p style="color: red;">Error loading logs: ${err.message}</p>`;
+        console.error("Financials Error:", err);
+        list.innerHTML = `<p style="color:red; text-align:center;">Ledger Error: ${err.message}</p>`;
     }
 };
 
 window.updateAppStatus = async function (appId, status) {
     try {
         const updates = { status };
-        if (status === 'rejected') {
-            showToast("Test Refund Initiated...");
-            updates.paymentStatus = 'Refunded (Test Mode)';
-            updates.payoutStatus = 'Refunded';
+
+        if (status === 'completed') {
+            showToast("Releasing funds from Escrow...");
+            await releaseEscrowToWallet(appId);
+        } else if (status === 'rejected' || status === 'cancelled') {
+            showToast("Booking Canceled. Handling refund...");
+            await handleRefund(appId);
         }
 
         await db.collection('appointments').doc(appId).update(updates);
-        showToast(`Appointment ${status}`);
+        showToast(`Appointment marked ${status}`);
 
         // Notify simulation
         const app = AppState.appointments.find(a => a.id === appId);
@@ -2761,7 +2980,8 @@ window.updateAppStatus = async function (appId, status) {
 
         refreshActiveDashboard();
     } catch (err) {
-        showToast("Update failed", "error");
+        console.error("Update failed:", err);
+        showToast("Update failed: " + err.message, "error");
     }
 };
 
