@@ -14,7 +14,7 @@ console.log("HealthMate App Loading. Version:", APP_VERSION);
 // --- Razorpay Configuration ---
 const RAZORPAY_CONFIG = {
     // IMPORTANT: Use rzp_test_... for local testing and rzp_live_... for actual payments.
-    key: "rzp_test_k9B5S7X9qWx3k1", // REPLACE THIS with your own Razorpay Key ID
+    key: "rzp_test_SON87WB6ElEXsT", // User's Test Key ID
     name: "HealthMate",
     description: "Doctor Consultation / Lab Test"
 };
