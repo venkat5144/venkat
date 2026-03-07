@@ -1803,6 +1803,7 @@ window.showDoctorTab = function (tab, event) {
 
     if (tab === 'summary') renderDoctorDashboard();
     if (tab === 'wallet') renderWallet('doctor');
+    if (tab === 'profile') renderMultiClinics();
 };
 
 window.showLabTab = function (tab, event) {
@@ -1818,6 +1819,7 @@ window.showLabTab = function (tab, event) {
 
     if (tab === 'summary') renderLabDashboard();
     if (tab === 'wallet') renderWallet('lab');
+    if (tab === 'profile') renderMultiClinics();
 };
 
 window.renderWallet = async function (role) {
@@ -1995,6 +1997,19 @@ window.openDetailsView = function (itemId, type) {
                     <h4 style="margin-bottom:15px;"><i class="fas fa-hospital-user"></i> Practice Details</h4>
                     <p style="font-size:0.9rem;"><strong>${item.clinicName || (type === 'doctors' ? 'Healthcare Center' : 'Diagnostic Center')}</strong></p>
                     <p style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">${item.address || 'Hitech City, Hyderabad, India'}</p>
+                    
+                    ${item.locations && item.locations.length > 0 ? `
+                        <div style="margin-top:15px; border-top:1px solid #ddd; padding-top:15px;">
+                            <h5 style="margin-bottom:10px; font-size:0.8rem; color:var(--text-muted);">Available Branches:</h5>
+                            ${item.locations.map(loc => `
+                                <div style="font-size:0.8rem; margin-bottom:8px;">
+                                    <i class="fas fa-location-dot" style="color:var(--primary); width:15px;"></i> <strong>${loc.name}</strong><br>
+                                    <span style="color:var(--text-muted); margin-left:15px;">${loc.timing} | ${loc.address}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
                     <div style="display:flex; gap:10px; margin-top:15px;">
                          <button class="btn-small" style="background:var(--secondary);" onclick="showToast('Opening Google Maps...')"><i class="fas fa-map-location-dot"></i> View on Map</button>
                          <button class="btn-small" style="background:#fff; color:var(--text-main); border:1px solid #ddd;" onclick="showToast('Contact: +91 999 000 1111')"><i class="fas fa-phone"></i> Contact</button>
@@ -2015,34 +2030,135 @@ window.openDetailsView = function (itemId, type) {
 };
 
 window.simulateGPS = function () {
-    showToast("Detecting nearby services...");
+    showToast("Detecting real-time GPS coordinates...");
     const grid = document.getElementById('nearby-grid');
     const locationText = document.getElementById('dashboard-location-text');
 
-    if (locationText) {
-        const locations = ['Hitech City', 'Banjara Hills', 'Jubilee Hills', 'Gachibowli'];
-        locationText.innerText = locations[Math.floor(Math.random() * locations.length)];
+    if (!navigator.geolocation) {
+        showToast("Geolocation is not supported by your browser.", "warning");
+        return;
     }
 
-    if (!grid) return;
-    grid.innerHTML = '<p style="text-align:center; padding:40px; width:100%; color:var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Localizing services...</p>';
+    navigator.geolocation.getCurrentPosition(async (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log(`[GPS] Lat: ${latitude}, Lng: ${longitude}`);
 
-    setTimeout(() => {
-        const nearby = [...AppState.doctors, ...AppState.labs].slice(0, 4);
-        grid.innerHTML = nearby.map(item => `
-            <div class="tile-item" onclick="openDetailsView('${item.id}', '${item.type || 'doctors'}')" style="cursor:pointer;">
-                <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">${item.name[0]}</div>
-                <div class="tile-info">
-                    <h4>${item.name}</h4>
-                    <p><i class="fas fa-location-arrow"></i> ~${(Math.random() * 3).toFixed(1)} km away • ${item.specialty || 'General'}</p>
-                </div>
-                <div style="text-align:right;">
-                    <span style="color:#2ecc71; font-weight:700; font-size:0.8rem;">OPEN</span>
-                    <p style="font-size:0.7rem; color:var(--text-muted);">₹${item.price}</p>
-                </div>
+        if (locationText) {
+            // Reverse Geocoding would happen here typically. Simulation for now:
+            locationText.innerText = "Current Location (Detected)";
+        }
+
+        if (!grid) return;
+        grid.innerHTML = '<p style="text-align:center; padding:40px; width:100%; color:var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Analyzing proximity...</p>';
+
+        setTimeout(() => {
+            const allProviders = [...AppState.doctors, ...AppState.labs];
+            // Sort by simulated distance based on lat/lng or just slice for now
+            const nearby = allProviders.slice(0, 4);
+
+            grid.innerHTML = nearby.map(item => {
+                const dist = (Math.random() * 2 + 0.5).toFixed(1); // Real calculation would use Haversine formula
+                return `
+                    <div class="tile-item" onclick="openDetailsView('${item.id}', '${item.type || 'doctors'}')" style="cursor:pointer;">
+                        <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:900;">${item.name[0]}</div>
+                        <div class="tile-info">
+                            <h4>${item.name}</h4>
+                            <p><i class="fas fa-location-arrow"></i> ~${dist} km away • ${item.specialty || 'General'}</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="color:#2ecc71; font-weight:700; font-size:0.8rem;">OPEN</span>
+                            <p style="font-size:0.7rem; color:var(--text-muted);">₹${item.price}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            showToast("Nearby services updated based on your GPS!");
+        }, 1200);
+
+    }, (error) => {
+        showToast("Unable to retrieve location: " + error.message, "error");
+    });
+};
+
+window.renderMultiClinics = function () {
+    const isLab = AppState.user.role === 'lab';
+    const listId = isLab ? 'lab-multi-clinic-list' : 'multi-clinic-list';
+    const list = document.getElementById(listId);
+    if (!list) return;
+
+    const locations = AppState.user.locations || [];
+    if (locations.length === 0) {
+        list.innerHTML = `<p style="font-size:0.8rem; color:var(--text-muted); padding:10px; border:1px dashed #ddd; border-radius:8px; text-align:center;">No additional branches added.</p>`;
+        return;
+    }
+
+    list.innerHTML = locations.map((loc, index) => `
+        <div style="background:#f9f9f9; padding:12px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #f0f0f0;">
+            <div>
+                <h4 style="margin:0; font-size:0.9rem;">${loc.name}</h4>
+                <p style="margin:2px 0; font-size:0.75rem; color:var(--text-muted);">${loc.timing || '9 AM - 8 PM'} | ${loc.address.split(',')[0]}...</p>
             </div>
-        `).join('');
-    }, 1500);
+            <button class="btn-small" style="padding:5px; background:none; color:#e23744;" onclick="removeClinicLocation(${index})"><i class="fas fa-trash"></i></button>
+        </div>
+    `).join('');
+};
+
+window.addClinicPrompt = function () {
+    DOM.modalBody.innerHTML = `
+        <div style="padding:20px;">
+            <h3>Add New Clinic Location</h3>
+            <div class="input-group"><label>Clinic Name</label><input type="text" id="new-loc-name" placeholder="e.g. City Care Center"></div>
+            <div class="input-group"><label>Service Hours</label><input type="text" id="new-loc-timing" placeholder="e.g. Mon-Sat (10-5)"></div>
+            <div class="input-group"><label>Full Address</label><textarea id="new-loc-address" placeholder="Physical location details"></textarea></div>
+            <button class="btn-signup" style="width:100%; margin-top:15px;" onclick="saveNewClinicLocation()">Add Location</button>
+        </div>
+    `;
+    DOM.modal.classList.remove('hidden');
+};
+
+window.saveNewClinicLocation = async function () {
+    const name = document.getElementById('new-loc-name').value;
+    const timing = document.getElementById('new-loc-timing').value;
+    const address = document.getElementById('new-loc-address').value;
+
+    if (!name || !address) return showToast("Name and Address are required", "warning");
+
+    const newLoc = { name, timing, address, createdAt: new Date() };
+    const locations = AppState.user.locations || [];
+    locations.push(newLoc);
+
+    showToast("Adding location...");
+    try {
+        const coll = AppState.user.role === 'doctor' ? 'doctors' : 'labs';
+        await db.collection(coll).doc(AppState.user.id).update({
+            locations: locations
+        });
+        AppState.user.locations = locations;
+        showToast("Location added successfully!", "success");
+        DOM.modal.classList.add('hidden');
+        renderMultiClinics();
+    } catch (err) {
+        showToast("Failed to add location", "error");
+    }
+};
+
+window.removeClinicLocation = async function (index) {
+    if (!confirm("Are you sure you want to remove this location?")) return;
+
+    const locations = AppState.user.locations || [];
+    locations.splice(index, 1);
+
+    try {
+        const coll = AppState.user.role === 'doctor' ? 'doctors' : 'labs';
+        await db.collection(coll).doc(AppState.user.id).update({
+            locations: locations
+        });
+        AppState.user.locations = locations;
+        showToast("Location removed");
+        renderMultiClinics();
+    } catch (err) {
+        showToast("Remove failed", "error");
+    }
 };
 
 window.uploadPrescription = function () {

@@ -601,18 +601,9 @@
                             <h4 style="margin-bottom:15px;"><i class="fas fa-hospital"></i> Multi-Clinic Locations</h4>
                             <div id="multi-clinic-list"
                                 style="margin-bottom:15px; display:flex; flex-direction:column; gap:10px;">
-                                <div
-                                    style="background:#f9f9f9; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-                                    <span><strong>Main Branch</strong> - Morning (9-12)</span>
-                                    <span style="font-size:0.7rem; color:var(--primary);">Active</span>
-                                </div>
-                                <div
-                                    style="background:#f9f9f9; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-                                    <span><strong>City Center</strong> - Evening (5-8)</span>
-                                    <button class="btn-small" style="padding:2px 8px; font-size:0.6rem;">Edit</button>
-                                </div>
+                                <!-- Rendered dynamically -->
                             </div>
-                            <button class="btn-small"
+                            <button class="btn-small" onclick="addClinicPrompt()"
                                 style="width:100%; border:1px dashed var(--primary); background:none; color:var(--primary); margin-bottom:20px;">+
                                 Add New Clinic Location</button>
                             <button class="btn-signup" onclick="saveDoctorProfile()" style="width:100%;">Save
@@ -764,6 +755,17 @@
                             </div>
                             <div class="input-group"><label>Lab Address</label><textarea
                                     id="lab-profile-address"></textarea></div>
+
+                            <hr style="margin:25px 0; border:0; border-top:1px solid #eee;">
+                            <h4 style="margin-bottom:15px;"><i class="fas fa-microscope"></i> Branch Locations</h4>
+                            <div id="lab-multi-clinic-list"
+                                style="margin-bottom:15px; display:flex; flex-direction:column; gap:10px;">
+                                <!-- Shared logic will use multi-clinic-list for ID simplicity if needed, but let's stick to unique IDs if possible -->
+                            </div>
+                            <button class="btn-small" onclick="addClinicPrompt()"
+                                style="width:100%; border:1px dashed var(--primary); background:none; color:var(--primary); margin-bottom:20px;">+
+                                Add New Branch</button>
+
                             <button class="btn-signup" onclick="saveLabProfile()" style="width:100%;">Save
                                 Profile Changes</button>
                         </div>
