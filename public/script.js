@@ -2002,16 +2002,19 @@ window.openDetailsView = function (itemId, type) {
                         <div style="margin-top:15px; border-top:1px solid #ddd; padding-top:15px;">
                             <h5 style="margin-bottom:10px; font-size:0.8rem; color:var(--text-muted);">Available Branches:</h5>
                             ${item.locations.map(loc => `
-                                <div style="font-size:0.8rem; margin-bottom:8px;">
-                                    <i class="fas fa-location-dot" style="color:var(--primary); width:15px;"></i> <strong>${loc.name}</strong><br>
-                                    <span style="color:var(--text-muted); margin-left:15px;">${loc.timing} | ${loc.address}</span>
+                                <div style="font-size:0.8rem; margin-bottom:12px; display:flex; justify-content:space-between; align-items:flex-start;">
+                                    <div>
+                                        <i class="fas fa-location-dot" style="color:var(--primary); width:15px;"></i> <strong>${loc.name}</strong><br>
+                                        <span style="color:var(--text-muted); margin-left:15px;">${loc.timing} | ${loc.address}</span>
+                                    </div>
+                                    ${loc.mapUrl ? `<button class="btn-small" style="padding:4px 8px; font-size:0.6rem; background:var(--primary); color:white; border:none;" onclick="window.open('${loc.mapUrl}', '_blank')"><i class="fas fa-location-arrow"></i> Navigate</button>` : ''}
                                 </div>
                             `).join('')}
                         </div>
                     ` : ''}
 
                     <div style="display:flex; gap:10px; margin-top:15px;">
-                         <button class="btn-small" style="background:var(--secondary);" onclick="showToast('Opening Google Maps...')"><i class="fas fa-map-location-dot"></i> View on Map</button>
+                         <button class="btn-small" style="background:var(--secondary);" onclick="window.open('${item.mapUrl || 'https://www.google.com/maps/search/' + encodeURIComponent(item.address || 'India')}', '_blank')"><i class="fas fa-map-location-dot"></i> View on Map</button>
                          <button class="btn-small" style="background:#fff; color:var(--text-main); border:1px solid #ddd;" onclick="showToast('Contact: +91 999 000 1111')"><i class="fas fa-phone"></i> Contact</button>
                     </div>
                 </div>
@@ -2086,6 +2089,18 @@ window.renderMultiClinics = function () {
     const list = document.getElementById(listId);
     if (!list) return;
 
+    // Pre-fill primary fields
+    const prefix = isLab ? 'lab' : 'doc';
+    const spec = document.getElementById(`${prefix}-profile-spec`);
+    const fee = document.getElementById(`${prefix}-profile-fee`);
+    const addr = document.getElementById(`${prefix}-profile-address`);
+    const map = document.getElementById(`${prefix}-profile-map`);
+
+    if (spec) spec.value = AppState.user.specialty || '';
+    if (fee) fee.value = AppState.user.price || '';
+    if (addr) addr.value = AppState.user.address || '';
+    if (map) map.value = AppState.user.mapUrl || '';
+
     const locations = AppState.user.locations || [];
     if (locations.length === 0) {
         list.innerHTML = `<p style="font-size:0.8rem; color:var(--text-muted); padding:10px; border:1px dashed #ddd; border-radius:8px; text-align:center;">No additional branches added.</p>`;
@@ -2094,9 +2109,10 @@ window.renderMultiClinics = function () {
 
     list.innerHTML = locations.map((loc, index) => `
         <div style="background:#f9f9f9; padding:12px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #f0f0f0;">
-            <div>
+            <div style="flex:1;">
                 <h4 style="margin:0; font-size:0.9rem;">${loc.name}</h4>
                 <p style="margin:2px 0; font-size:0.75rem; color:var(--text-muted);">${loc.timing || '9 AM - 8 PM'} | ${loc.address.split(',')[0]}...</p>
+                ${loc.mapUrl ? `<a href="${loc.mapUrl}" target="_blank" style="font-size:0.7rem; color:var(--primary); text-decoration:none;"><i class="fas fa-map-marker-alt"></i> View on Google Maps</a>` : ''}
             </div>
             <button class="btn-small" style="padding:5px; background:none; color:#e23744;" onclick="removeClinicLocation(${index})"><i class="fas fa-trash"></i></button>
         </div>
@@ -2105,12 +2121,34 @@ window.renderMultiClinics = function () {
 
 window.addClinicPrompt = function () {
     DOM.modalBody.innerHTML = `
-        <div style="padding:20px;">
-            <h3>Add New Clinic Location</h3>
-            <div class="input-group"><label>Clinic Name</label><input type="text" id="new-loc-name" placeholder="e.g. City Care Center"></div>
-            <div class="input-group"><label>Service Hours</label><input type="text" id="new-loc-timing" placeholder="e.g. Mon-Sat (10-5)"></div>
-            <div class="input-group"><label>Full Address</label><textarea id="new-loc-address" placeholder="Physical location details"></textarea></div>
-            <button class="btn-signup" style="width:100%; margin-top:15px;" onclick="saveNewClinicLocation()">Add Location</button>
+        <div style="padding:24px; max-width:500px; margin:auto;">
+            <h3 style="margin-bottom:20px; color:var(--primary);"><i class="fas fa-map-location-dot"></i> Add Clinic Location</h3>
+            
+            <div class="input-group">
+                <label style="font-weight:600;">Clinic / Branch Name</label>
+                <input type="text" id="new-loc-name" placeholder="e.g. Apollo Clinic - Hitech City" style="width:100%; padding:12px; border:1.5px solid #eee; border-radius:12px;">
+            </div>
+
+            <div class="input-group" style="margin-top:15px;">
+                <label style="font-weight:600;">Service Hours</label>
+                <input type="text" id="new-loc-timing" placeholder="e.g. Mon-Sat (10:00 AM - 05:00 PM)" style="width:100%; padding:12px; border:1.5px solid #eee; border-radius:12px;">
+            </div>
+
+            <div class="input-group" style="margin-top:15px;">
+                <label style="font-weight:600;">Physical Address</label>
+                <textarea id="new-loc-address" placeholder="Complete building and street details" style="width:100%; padding:12px; border:1.5px solid #eee; border-radius:12px; min-height:80px;"></textarea>
+            </div>
+
+            <div class="input-group" style="margin-top:15px;">
+                <label style="font-weight:600;">Google Maps URL (Optional)</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="new-loc-map" placeholder="Paste link from Google Maps" style="flex:1; padding:12px; border:1.5px solid #eee; border-radius:12px;">
+                    <button class="btn-small" style="padding:0 15px; background:var(--bg-light); color:var(--text-main); border:1.5px solid #eee;" onclick="window.open('https://www.google.com/maps/search/' + encodeURIComponent(document.getElementById('new-loc-address').value || 'India'), '_blank')">Find</button>
+                </div>
+                <p style="font-size:0.7rem; color:var(--text-muted); margin-top:5px;"><i class="fas fa-circle-info"></i> Search your branch on Google Maps, click Share, and paste the link here.</p>
+            </div>
+
+            <button class="btn-signup" style="width:100%; margin-top:25px; background:var(--primary); box-shadow:0 4px 15px rgba(226, 55, 68, 0.2);" onclick="saveNewClinicLocation()">Save Branch Location</button>
         </div>
     `;
     DOM.modal.classList.remove('hidden');
@@ -2120,10 +2158,11 @@ window.saveNewClinicLocation = async function () {
     const name = document.getElementById('new-loc-name').value;
     const timing = document.getElementById('new-loc-timing').value;
     const address = document.getElementById('new-loc-address').value;
+    const mapUrl = document.getElementById('new-loc-map').value;
 
     if (!name || !address) return showToast("Name and Address are required", "warning");
 
-    const newLoc = { name, timing, address, createdAt: new Date() };
+    const newLoc = { name, timing, address, mapUrl, createdAt: new Date() };
     const locations = AppState.user.locations || [];
     locations.push(newLoc);
 
@@ -2187,12 +2226,13 @@ window.generateSlots = function () {
 };
 
 window.saveDoctorProfile = async function () {
+    if (!AppState.user) return;
     const spec = document.getElementById('doc-profile-spec').value;
     const fee = document.getElementById('doc-profile-fee').value;
     const address = document.getElementById('doc-profile-address').value;
+    const mapUrl = document.getElementById('doc-profile-map').value;
     const photoFile = document.getElementById('doctor-photo-input').files[0];
 
-    if (!AppState.user) return;
     try {
         let photoURL = AppState.user.image;
         if (photoFile) {
@@ -2204,23 +2244,26 @@ window.saveDoctorProfile = async function () {
             specialty: spec,
             price: fee,
             address: address,
+            mapUrl: mapUrl,
             image: photoURL
         });
 
+        AppState.user = { ...AppState.user, specialty: spec, price: fee, address, mapUrl, image: photoURL };
         showToast("Clinic Profile Updated!");
         refreshActiveDashboard();
     } catch (err) {
-        showToast("Save failed", "error");
+        showToast("Save failed: " + err.message, "error");
     }
 };
 
 window.saveLabProfile = async function () {
+    if (!AppState.user) return;
     const spec = document.getElementById('lab-profile-spec').value;
     const fee = document.getElementById('lab-profile-fee').value;
     const address = document.getElementById('lab-profile-address').value;
+    const mapUrl = document.getElementById('lab-profile-map').value;
     const photoFile = document.getElementById('lab-profile-image').files[0];
 
-    if (!AppState.user) return;
     try {
         let photoURL = AppState.user.image;
         if (photoFile) {
@@ -2232,13 +2275,15 @@ window.saveLabProfile = async function () {
             specialty: spec,
             price: fee,
             address: address,
+            mapUrl: mapUrl,
             image: photoURL
         });
 
+        AppState.user = { ...AppState.user, specialty: spec, price: fee, address, mapUrl, image: photoURL };
         showToast("Lab Profile Updated!");
         refreshActiveDashboard();
     } catch (err) {
-        showToast("Save failed", "error");
+        showToast("Save failed: " + err.message, "error");
     }
 };
 
