@@ -122,22 +122,15 @@ a {
     user-select: none;
 }
 
-.logo-icon {
-    color: var(--primary);
-    font-size: 1.8rem;
-    animation: HeartBeat 2s infinite ease-in-out;
+.logo-img {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
+    transition: var(--transition-smooth);
 }
 
-@keyframes HeartBeat {
-
-    0%,
-    100% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.1);
-    }
+.logo:hover .logo-img {
+    transform: scale(1.1);
 }
 
 .logo-text span {
