@@ -1027,38 +1027,73 @@ window.selectPayMethod = (el, method) => {
 };
 
 window.processPayment = function (itemId, type) {
-    console.log("[PAYMENT] Starting simulation for:", itemId, type);
     if (!AppState.selectedSlot) return showToast("Please select a time slot", "warning");
+
+    const item = (type === 'doctors' ? AppState.doctors : AppState.labs).find(i => i.id === itemId);
+    if (!item) return;
 
     const btn = document.getElementById('confirm-booking-btn');
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Initializing Secure Gateway...';
     }
 
-    showToast("Connecting to bank... Please wait", "success");
+    const basePrice = parseInt(item.price) || 500;
+    const totalAmount = Math.floor(basePrice * 1.18);
 
-    // Skip Razorpay and simulate success for testing
-    setTimeout(() => {
-        console.log("[PAYMENT] Delay completed, calling confirmBooking");
-        if (typeof window.confirmBooking === 'function') {
+    const options = {
+        key: RAZORPAY_CONFIG.key,
+        amount: totalAmount * 100, // Amount in paise
+        currency: "INR",
+        name: RAZORPAY_CONFIG.name,
+        description: `Booking for ${item.name} (${type === 'doctors' ? 'Consultation' : 'Lab Test'})`,
+        image: "assets/healthmate-logo.png",
+        prefill: {
+            name: AppState.user.name,
+            email: AppState.user.email,
+            contact: AppState.user.phone || ""
+        },
+        theme: { color: "#E23744" },
+        handler: function (response) {
+            showToast("Payment Successful!", "success");
             window.confirmBooking(itemId, type, {
                 status: 'Paid',
-                mode: 'Online (Instant)',
-                transactionId: 'HM_' + Math.random().toString(36).substr(2, 9).toUpperCase()
+                mode: 'Online (Razorpay)',
+                transactionId: response.razorpay_payment_id
             }).catch(err => {
                 console.error("[PAYMENT] confirmBooking failed:", err);
                 showToast("Booking failed: " + err.message, "error");
+            });
+        },
+        modal: {
+            ondismiss: function () {
+                showToast("Payment cancelled by user", "warning");
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = 'Proceed to Payment';
                 }
-            });
-        } else {
-            console.error("[PAYMENT] window.confirmBooking is not a function!");
-            showToast("System error: Booking function not found", "error");
+            }
         }
-    }, 2000);
+    };
+
+    try {
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function (response) {
+            showToast("Payment Failed: " + response.error.description, "error");
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = 'Proceed to Payment';
+            }
+        });
+        rzp.open();
+    } catch (err) {
+        console.error("Razorpay error:", err);
+        showToast("Gateway error. Switching to offline simulator...", "warning");
+        // Fallback for demo if script fails or key is missing
+        setTimeout(() => {
+            window.confirmBooking(itemId, type, { status: 'Paid', mode: 'Demo Simulation', transactionId: 'SIM_' + Date.now() });
+        }, 1500);
+    }
 };
 
 window.confirmBooking = async function (itemId, type, paymentData = { status: 'Pending', mode: 'Offline' }) {
