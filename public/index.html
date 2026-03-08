@@ -116,21 +116,23 @@
             </div>
 
             <div class="user-actions">
+                <div class="nav-links desktop-only"
+                    style="display:flex; gap:30px; margin-right:30px; font-weight:600; color:var(--text-main);">
+                    <a href="javascript:void(0)" onclick="location.reload()" style="color:var(--primary);">Home</a>
+                    <a href="javascript:void(0)" onclick="setCategory('doctors')">Doctors</a>
+                    <a href="javascript:void(0)" onclick="setCategory('labs')">Lab Tests</a>
+                    <a href="javascript:void(0)" onclick="showPatientSection('history')">Appointments</a>
+                </div>
                 <button class="theme-switch" id="theme-toggle" title="Toggle Dark Mode">
                     <i class="fas fa-moon"></i>
                 </button>
                 <div class="user-profile hidden" id="user-info">
-                    <div class="patient-nav desktop-only" id="patient-secondary-nav"
-                        style="display:flex; gap:20px; margin-right:20px;">
-                        <a href="javascript:void(0)" onclick="showPatientSection('home')">Home</a>
-                        <a href="javascript:void(0)" onclick="showPatientTab('pharmacy')">Pharmacy</a>
-                        <a href="javascript:void(0)" onclick="showPatientTab('wallet')">Wallet</a>
-                    </div>
                     <span id="current-user-name" onclick="showPatientSection('profile', event)"
-                        style="cursor:pointer">Welcome, User</span>
-                    <span class="role-badge" id="current-user-role">Patient</span>
+                        style="cursor:pointer; font-weight:700;">User</span>
+                    <span class="role-badge" id="current-user-role"
+                        style="background:var(--primary-light); color:var(--primary);">Patient</span>
                 </div>
-                <button class="btn-signup" id="auth-main-btn">Login</button>
+                <button class="btn-signup" id="auth-main-btn">Login / Sign Up</button>
             </div>
         </nav>
     </header>
@@ -164,51 +166,66 @@
         <section id="patient-view" class="role-section">
             <!-- Tab: Home (Hero + Categories + Listings) -->
             <div id="patient-home-tab" class="patient-tab">
-                <!-- Redesigned Home Dashboard with Premium Glassmorphism -->
-                <section class="dashboard-header container"
-                    style="padding: 25px 0 15px; background: linear-gradient(180deg, var(--primary-light) 0%, #fff 100%); border-radius: 0 0 30px 30px; margin-bottom: 20px;">
-                    <div class="search-bar-wrapper">
-                        <div class="location-btn" onclick="simulateGPS()">
+                <!-- Redesigned Hero Section -->
+                <section class="hero-section container" style="padding: 60px 0 40px; text-align: center;">
+                    <h1 style="font-size: 3rem; font-weight: 800; color: #111; margin-bottom: 20px; line-height: 1.1;">
+                        Find & Book the <span style="color:var(--primary);">Best Doctors</span> Near You</h1>
+                    <p style="color:var(--text-muted); font-size: 1.1rem; margin-bottom: 40px;">Consut with 100%
+                        verified doctors and diagnostic labs from the comfort of your home.</p>
+
+                    <div class="search-bar-wrapper"
+                        style="max-width: 800px; margin: 0 auto; display: flex; align-items: center; background: #fff; border-radius: 20px; padding: 10px 25px; box-shadow: var(--shadow-lg); border: 1px solid var(--border);">
+                        <div class="location-btn" onclick="simulateGPS()"
+                            style="display: flex; align-items: center; gap: 10px; padding-right: 20px; border-right: 2px solid var(--border); color: var(--primary); cursor: pointer;">
                             <i class="fas fa-location-dot"></i>
-                            <span id="dashboard-location-text">Mumbai, MH</span>
+                            <span id="dashboard-location-text" style="font-weight: 700;">Mumbai, MH</span>
                         </div>
-                        <div class="search-input-box">
-                            <i class="fas fa-magnifying-glass"></i>
-                            <input type="text" placeholder="Specialists, Labs, Medicines..."
-                                id="dashboard-search-input">
+                        <div class="search-input-box"
+                            style="flex: 1; display: flex; align-items: center; gap: 15px; padding-left: 20px;">
+                            <i class="fas fa-magnifying-glass" style="color: #94a3b8;"></i>
+                            <input type="text" placeholder="Search Doctors, Specialties, Symptoms..."
+                                id="dashboard-search-input"
+                                style="border: none; outline: none; width: 100%; height: 50px; font-size: 1.1rem; font-weight: 500;">
                         </div>
                     </div>
                 </section>
 
-                <section class="dashboard-categories container" style="margin-bottom: 30px;">
-                    <div class="cat-grid">
-                        <div class="category-card" onclick="setCategory('doctors')"
-                            style="background: #fffafa; border: 1px solid #ffebeb;">
-                            <div class="cat-icon" style="background: var(--primary); color: white;">
-                                <i class="fas fa-user-md"></i>
-                            </div>
-                            <span>Doctors</span>
+                <section class="dashboard-categories container" style="margin-bottom: 50px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                        <h2 style="font-size:1.5rem; font-weight:800;">Consult Top Specialities</h2>
+                        <a href="javascript:void(0)"
+                            style="color:var(--primary); font-weight:700; font-size:0.9rem;">View All Specialities</a>
+                    </div>
+                    <div class="cat-grid" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px;">
+                        <div class="category-card" onclick="setSpecialty('Dentist')">
+                            <div class="cat-icon" style="background: #eef2ff; color: #6366f1;"><i
+                                    class="fas fa-tooth"></i></div>
+                            <span style="font-weight: 700; font-size: 0.9rem;">Dentist</span>
                         </div>
-                        <div class="category-card" onclick="setCategory('labs')"
-                            style="background: #f0f7ff; border: 1px solid #e1f0ff;">
-                            <div class="cat-icon" style="background: #007bff; color: white;">
-                                <i class="fas fa-microscope"></i>
-                            </div>
-                            <span>Labs</span>
+                        <div class="category-card" onclick="setSpecialty('Cardiologist')">
+                            <div class="cat-icon" style="background: #fff1f2; color: #f43f5e;"><i
+                                    class="fas fa-heart-pulse"></i></div>
+                            <span style="font-weight: 700; font-size: 0.9rem;">Cardiologist</span>
                         </div>
-                        <div class="category-card" onclick="showPatientTab('pharmacy')"
-                            style="background: #f2fff6; border: 1px solid #e1ffeb;">
-                            <div class="cat-icon" style="background: #27ae60; color: white;">
-                                <i class="fas fa-capsules"></i>
-                            </div>
-                            <span>Medical</span>
+                        <div class="category-card" onclick="setSpecialty('Dermatologist')">
+                            <div class="cat-icon" style="background: #f0fdf4; color: #10b981;"><i
+                                    class="fas fa-hand-holding-medical"></i></div>
+                            <span style="font-weight: 700; font-size: 0.9rem;">Dermatologist</span>
                         </div>
-                        <div class="category-card" onclick="showPatientSection('history')"
-                            style="background: #fff9f0; border: 1px solid #ffefe1;">
-                            <div class="cat-icon" style="background: #f39c12; color: white;">
-                                <i class="fas fa-notes-medical"></i>
-                            </div>
-                            <span>Bookings</span>
+                        <div class="category-card" onclick="setSpecialty('Pediatrician')">
+                            <div class="cat-icon" style="background: #fef2f2; color: #ef4444;"><i
+                                    class="fas fa-baby"></i></div>
+                            <span style="font-weight: 700; font-size: 0.9rem;">Pediatrician</span>
+                        </div>
+                        <div class="category-card" onclick="setSpecialty('Orthopedic')">
+                            <div class="cat-icon" style="background: #fefce8; color: #eab308;"><i
+                                    class="fas fa-bone"></i></div>
+                            <span style="font-weight: 700; font-size: 0.9rem;">Orthopedic</span>
+                        </div>
+                        <div class="category-card" onclick="setSpecialty('Neurologist')">
+                            <div class="cat-icon" style="background: #f5f3ff; color: #8b5cf6;"><i
+                                    class="fas fa-brain"></i></div>
+                            <span style="font-weight: 700; font-size: 0.9rem;">Neurologist</span>
                         </div>
                     </div>
                 </section>
@@ -333,6 +350,177 @@
 
                     <div class="grid-container" id="grid-container">
                         <!-- Content injected by JS -->
+                    </div>
+                </section>
+
+                <!-- Featured Lab Tests (Practo Style) -->
+                <section class="lab-tests container" style="padding: 80px 0; border-top: 1px solid var(--border);">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:40px;">
+                        <div>
+                            <h2 style="font-size:2rem; font-weight:800; margin-bottom:10px; color:#111;">Popular
+                                Diagnostic Tests</h2>
+                            <p style="color:var(--text-muted); font-size:1rem;">Book tests with NABL verified labs and
+                                home sample collection.</p>
+                        </div>
+                        <button class="btn-signup" onclick="setCategory('labs')"
+                            style="background:var(--secondary); padding: 10px 25px;">View All Tests</button>
+                    </div>
+                    <div class="test-grid" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:25px;">
+                        <div class="category-card" style="text-align:left; padding:35px; border-radius: 20px;"
+                            onclick="setCategory('labs')">
+                            <div
+                                style="width:60px; height:60px; background:#eef2ff; color:var(--primary); border-radius:15px; display:flex; align-items:center; justify-content:center; font-size:1.8rem; margin-bottom:25px;">
+                                <i class="fas fa-vial"></i></div>
+                            <h3 style="font-size:1.2rem; margin-bottom:12px; font-weight:700;">Full Body Checkup</h3>
+                            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px; line-height:1.5;">
+                                Complete screening of 60+ parameters including liver & kidney.</p>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-weight:800; color:var(--primary); font-size:1.1rem;">₹999/-</span>
+                                <span style="font-size:0.75rem; color:var(--secondary); font-weight:700;"><i
+                                        class="fas fa-check"></i> FREE Home Visit</span>
+                            </div>
+                        </div>
+                        <div class="category-card" style="text-align:left; padding:35px; border-radius: 20px;"
+                            onclick="setCategory('labs')">
+                            <div
+                                style="width:60px; height:60px; background:#fff1f2; color:#f43f5e; border-radius:15px; display:flex; align-items:center; justify-content:center; font-size:1.8rem; margin-bottom:25px;">
+                                <i class="fas fa-droplet"></i></div>
+                            <h3 style="font-size:1.2rem; margin-bottom:12px; font-weight:700;">Diabetes Screening</h3>
+                            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px; line-height:1.5;">
+                                HbA1c & Fasting blood sugar monitoring for accurate results.</p>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-weight:800; color:var(--primary); font-size:1.1rem;">₹499/-</span>
+                            </div>
+                        </div>
+                        <div class="category-card" style="text-align:left; padding:35px; border-radius: 20px;"
+                            onclick="setCategory('labs')">
+                            <div
+                                style="width:60px; height:60px; background:#f0fdf4; color:#10b981; border-radius:15px; display:flex; align-items:center; justify-content:center; font-size:1.8rem; margin-bottom:25px;">
+                                <i class="fas fa-dna"></i></div>
+                            <h3 style="font-size:1.2rem; margin-bottom:12px; font-weight:700;">Thyroid Profile</h3>
+                            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px; line-height:1.5;">
+                                T3, T4 & TSH analysis for hormonal balance tracking.</p>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-weight:800; color:var(--primary); font-size:1.1rem;">₹599/-</span>
+                            </div>
+                        </div>
+                        <div class="category-card" style="text-align:left; padding:35px; border-radius: 20px;"
+                            onclick="setCategory('labs')">
+                            <div
+                                style="width:60px; height:60px; background:#fefce8; color:#eab308; border-radius:15px; display:flex; align-items:center; justify-content:center; font-size:1.8rem; margin-bottom:25px;">
+                                <i class="fas fa-virus-covid"></i></div>
+                            <h3 style="font-size:1.2rem; margin-bottom:12px; font-weight:700;">Fever Profile</h3>
+                            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px; line-height:1.5;">
+                                Screening for Malaria, Dengue, and common infections.</p>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-weight:800; color:var(--primary); font-size:1.1rem;">₹899/-</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Testimonials -->
+                <section class="testimonials container"
+                    style="padding: 100px 0; background: #f8fafc; border-radius: 40px; margin-bottom: 80px;">
+                    <div style="text-align:center; max-width: 600px; margin: 0 auto 60px;">
+                        <h2 style="font-size:2.2rem; font-weight:900; margin-bottom:15px; color:#111;">What Our Patients
+                            Say</h2>
+                        <p style="color:var(--text-muted); font-size:1.1rem;">Thousands of users trust HealthMate for
+                            their medical needs every day.</p>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:30px;">
+                        <div class="testimonial-card"
+                            style="background:#fff; padding:40px; border-radius:24px; box-shadow:var(--shadow-md);">
+                            <div style="color:var(--primary); margin-bottom:20px; font-size:1.2rem;"><i
+                                    class="fas fa-quote-left"></i></div>
+                            <p
+                                style="color:#475569; font-style:italic; line-height:1.8; margin-bottom:30px; font-size:1rem;">
+                                "The easiest way to book a specialist. I found a highly rated cardiologist and had my
+                                consultation within an hour of booking."</p>
+                            <div style="display:flex; align-items:center; gap:15px;">
+                                <div
+                                    style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900;">
+                                    AS</div>
+                                <div>
+                                    <h4 style="margin:0; color:#1e293b;">Arjun Sharma</h4>
+                                    <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">Mumbai, MH</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="testimonial-card"
+                            style="background:#fff; padding:40px; border-radius:24px; box-shadow:var(--shadow-md);">
+                            <div style="color:var(--secondary); margin-bottom:20px; font-size:1.2rem;"><i
+                                    class="fas fa-quote-left"></i></div>
+                            <p
+                                style="color:#475569; font-style:italic; line-height:1.8; margin-bottom:30px; font-size:1rem;">
+                                "Lab test at home was incredibly convenient. The technician was professional and I got
+                                my reports on the app very quickly."</p>
+                            <div style="display:flex; align-items:center; gap:15px;">
+                                <div
+                                    style="width:50px; height:50px; background:var(--secondary-light); color:var(--secondary); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900;">
+                                    RK</div>
+                                <div>
+                                    <h4 style="margin:0; color:#1e293b;">Riya Kapoor</h4>
+                                    <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">Delhi, NCR</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="testimonial-card"
+                            style="background:#fff; padding:40px; border-radius:24px; box-shadow:var(--shadow-md);">
+                            <div style="color:var(--primary); margin-bottom:20px; font-size:1.2rem;"><i
+                                    class="fas fa-quote-left"></i></div>
+                            <p
+                                style="color:#475569; font-style:italic; line-height:1.8; margin-bottom:30px; font-size:1rem;">
+                                "Finally a healthcare app that works! Digital prescriptions, easy tracking, and great
+                                support. Highly recommended for every family."</p>
+                            <div style="display:flex; align-items:center; gap:15px;">
+                                <div
+                                    style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900;">
+                                    VS</div>
+                                <div>
+                                    <h4 style="margin:0; color:#1e293b;">Vikram Singh</h4>
+                                    <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">Bangalore, KA</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- App Download -->
+                <section class="app-download container"
+                    style="background: linear-gradient(135deg, var(--primary) 0%, #1e3a8a 100%); border-radius: 40px; padding: 80px; color: #fff; margin-bottom: 100px; display: flex; align-items: center; gap: 60px; position: relative; overflow: hidden;">
+                    <div style="flex:1.2; position: relative; z-index: 1;">
+                        <span
+                            style="background:rgba(255,255,255,0.2); padding:5px 15px; border-radius:50px; font-size:0.8rem; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:20px; display:inline-block;">New
+                            Mobile App</span>
+                        <h2 style="font-size: 3rem; font-weight: 900; margin-bottom: 25px; line-height:1.1;">Download
+                            the <br>HealthMate App</h2>
+                        <p
+                            style="font-size: 1.15rem; opacity: 0.9; margin-bottom: 40px; max-width: 500px; line-height: 1.6;">
+                            Book appointments, track health records, and consult doctors on the go. Faster, simpler, and
+                            always in your pocket.</p>
+                        <div style="display:flex; gap:20px;">
+                            <button class="btn-signup"
+                                style="background:#000; color:#fff; border:none; display:flex; align-items:center; gap:12px; padding:15px 30px; border-radius:15px;">
+                                <i class="fab fa-apple" style="font-size:1.5rem;"></i>
+                                <div style="text-align:left;">
+                                    <p style="font-size:0.6rem; margin:0; opacity:0.8;">Download on the</p>
+                                    <h5 style="margin:0; font-size:1rem;">App Store</h5>
+                                </div>
+                            </button>
+                            <button class="btn-signup"
+                                style="background:#000; color:#fff; border:none; display:flex; align-items:center; gap:12px; padding:15px 30px; border-radius:15px;">
+                                <i class="fab fa-google-play" style="font-size:1.5rem;"></i>
+                                <div style="text-align:left;">
+                                    <p style="font-size:0.6rem; margin:0; opacity:0.8;">Get it on</p>
+                                    <h5 style="margin:0; font-size:1rem;">Google Play</h5>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="desktop-only"
+                        style="flex:0.8; text-align:right; font-size:25rem; opacity:0.1; position:absolute; right:-50px; bottom:-100px;">
+                        <i class="fas fa-mobile-screen"></i>
                     </div>
                 </section>
             </div>
@@ -1052,6 +1240,69 @@
                     class="fas fa-paper-plane"></i></button>
         </div>
     </div>
+
+    <!-- Premium Professional Footer -->
+    <footer
+        style="background: #0f172a; color: #fff; padding: 80px 0 30px; margin-top: 100px; position: relative; border-top: 5px solid var(--primary);">
+        <div class="container"
+            style="display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr; gap: 50px; margin-bottom: 60px;">
+            <div class="footer-brand">
+                <div class="logo" style="margin-bottom: 25px;">
+                    <div class="logo-icon" style="background:var(--primary); color:#fff;"><i class="fas fa-plus"></i>
+                    </div>
+                    <span class="logo-text" style="color: #fff;">Health<span>Mate</span></span>
+                </div>
+                <p style="color: #94a3b8; line-height: 1.8; margin-bottom: 25px; font-size: 0.95rem;">Dedicated to
+                    connecting you with the highest quality healthcare providers. Providing trusted digital experiences
+                    for patients and providers alike.</p>
+                <div style="display: flex; gap: 15px;">
+                    <a href="#" style="color: #94a3b8; font-size: 1.3rem;"><i class="fab fa-facebook-square"></i></a>
+                    <a href="#" style="color: #94a3b8; font-size: 1.3rem;"><i class="fab fa-twitter"></i></a>
+                    <a href="#" style="color: #94a3b8; font-size: 1.3rem;"><i class="fab fa-instagram"></i></a>
+                    <a href="#" style="color: #94a3b8; font-size: 1.3rem;"><i class="fab fa-linkedin"></i></a>
+                </div>
+            </div>
+            <div class="footer-links">
+                <h4
+                    style="margin-bottom: 25px; font-weight: 700; color:#fff; text-transform: uppercase; letter-spacing: 1px; font-size: 0.85rem;">
+                    Company</h4>
+                <ul style="list-style: none; padding: 0; color: #94a3b8; line-height: 2.2; font-size: 0.95rem;">
+                    <li><a href="#" style="color: inherit; text-decoration:none;">About Us</a></li>
+                    <li><a href="#" style="color: inherit; text-decoration:none;">Our Doctors</a></li>
+                    <li><a href="#" style="color: inherit; text-decoration:none;">Our Labs</a></li>
+                    <li><a href="#" style="color: inherit; text-decoration:none;">Careers</a></li>
+                </ul>
+            </div>
+            <div class="footer-links">
+                <h4
+                    style="margin-bottom: 25px; font-weight: 700; color:#fff; text-transform: uppercase; letter-spacing: 1px; font-size: 0.85rem;">
+                    Support</h4>
+                <ul style="list-style: none; padding: 0; color: #94a3b8; line-height: 2.2; font-size: 0.95rem;">
+                    <li><a href="#" style="color: inherit; text-decoration:none;">Help Center</a></li>
+                    <li><a href="#" style="color: inherit; text-decoration:none;">Contact Support</a></li>
+                    <li><a href="#" style="color: inherit; text-decoration:none;">Terms of Service</a></li>
+                    <li><a href="#" style="color: inherit; text-decoration:none;">Privacy Policy</a></li>
+                </ul>
+            </div>
+            <div class="footer-newsletter"
+                style="background: rgba(42, 125, 225, 0.1); padding: 30px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                <h4 style="margin-bottom: 12px; font-weight: 700; color: var(--primary);">Join our Newsletter</h4>
+                <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 20px;">Health insights & updates delivered
+                    weekly.</p>
+                <div style="display: flex; gap: 8px;">
+                    <input type="email" placeholder="Email"
+                        style="background: #1e293b; border: none; padding: 12px; border-radius: 10px; color: #fff; width: 100%; outline: none;">
+                    <button class="btn-signup" style="padding: 10px 15px; border-radius: 10px;"><i
+                            class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>
+        <div class="container"
+            style="border-top: 1px solid #1e293b; padding-top: 30px; color: #64748b; font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center;">
+            <p>© 2026 HealthMate Digital Inc. All rights reserved.</p>
+            <p>Empowering healthier lives, everywhere.</p>
+        </div>
+    </footer>
 
     <div id="toast-container" class="toast-container"></div>
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>

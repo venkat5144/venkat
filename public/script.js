@@ -815,7 +815,7 @@ async function submitOnboardingApplication() {
 // --- UI Rendering ---
 function renderGrid() {
     const data = AppState.currentType === 'doctors' ? AppState.doctors : AppState.labs;
-    const grid = document.getElementById('grid-container'); // Fixed ID mismatch
+    const grid = document.getElementById('grid-container');
     if (!grid) return;
 
     const filtered = data.filter(item => {
@@ -827,44 +827,62 @@ function renderGrid() {
         const matchesLang = !AppState.activeFilters.language || (item.languages && item.languages.toLowerCase().includes(AppState.activeFilters.language.toLowerCase()));
         const matchesRating = !AppState.activeFilters.rating || (parseFloat(item.rating || 0) >= AppState.activeFilters.rating);
 
-        return matchesCat && matchesSearch && matchesLang && matchesRating; // Show all for demo
+        return matchesCat && matchesSearch && matchesLang && matchesRating;
     });
 
     if (filtered.length === 0) {
-        grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px;">
-            <img src="https://cdn-icons-png.flaticon.com/512/6134/6134065.png" style="width:120px; opacity:0.3;">
-            <p style="margin-top:20px; color:var(--text-muted);">No approved ${AppState.currentType} found matching your search.</p>
-        </div>`;
+        grid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align:center; padding: 60px 20px;">
+                <div style="font-size: 4rem; color: #E2E8F0; margin-bottom: 20px;"><i class="fas fa-user-md"></i></div>
+                <h3 style="color: var(--text-main);">No results found</h3>
+                <p style="color:var(--text-muted);">Try adjusting your search or filters to find what you're looking for.</p>
+            </div>`;
         return;
     }
 
     grid.innerHTML = filtered.map(item => {
-        const fallbackImg = AppState.currentType === 'doctors' ? "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=500&q=80" : "https://images.unsplash.com/photo-1511174511562-5f7f18b874f8?auto=format&fit=crop&w=500&q=80";
+        const fallbackImg = AppState.currentType === 'doctors' ?
+            "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=500&q=80" :
+            "https://images.unsplash.com/photo-1511174511562-5f7f18b874f8?auto=format&fit=crop&w=500&q=80";
+
+        const rating = item.rating || (4.5 + Math.random() * 0.5).toFixed(1);
+        const reviews = Math.floor(Math.random() * 200) + 50;
+        const exp = item.experience || Math.floor(Math.random() * 15) + 5;
+        const nextSlot = ["10:30 AM", "02:00 PM", "04:30 PM", "06:15 PM"][Math.floor(Math.random() * 4)];
+
         return `
         <div class="doctor-card" onclick="openDetailsView('${item.id}', '${AppState.currentType}')">
-            <div class="card-img" style="background-image: url('${item.image || fallbackImg}')">
-                ${item.approved ? `<span class="badge-verified"><i class="fas fa-certificate"></i> Verified</span>` : ''}
-                <div class="card-overlay">
-                    <div style="display:flex; gap:10px; align-items:center;">
-                         <span><i class="fas fa-star" style="color:#f1c40f;"></i> ${item.rating || '4.8'}</span>
-                         <span>•</span>
-                         <span>${item.experience || '8'}+ Yrs Exp</span>
+            ${item.isPremium ? '<div style="position:absolute; top:0; right:0; background:var(--accent); color:white; padding:4px 12px; font-size:0.65rem; font-weight:800; border-radius:0 0 0 12px; z-index:1;">SPONSORED</div>' : ''}
+            <div style="display:flex; gap:20px;">
+                <div class="card-photo-wrapper" style="position:relative;">
+                    <div style="width:100px; height:100px; border-radius:18px; overflow:hidden; border:2px solid #fff; box-shadow:0 10px 25px rgba(0,0,0,0.06);">
+                        <img src="${item.image || fallbackImg}" style="width:100%; height:100%; object-fit:cover;">
+                    </div>
+                </div>
+                <div style="flex:1;">
+                    <div style="display:flex; justify-content:space-between; align-items:start;">
+                        <h3 class="card-title" style="color:var(--primary); font-size:1.4rem;">${item.name}</h3>
+                    </div>
+                    <p style="color:var(--text-muted); font-size:0.95rem; font-weight:500; margin:4px 0;">${item.specialty || 'General Physician'}</p>
+                    <p style="font-size:0.85rem; color:#666;"><i class="fas fa-medal" style="color:var(--accent);"></i> ${exp} years experience overall</p>
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                        <span class="availability-badge"><i class="fas fa-clock"></i> Next: ${nextSlot}</span>
+                        <span class="availability-badge video"><i class="fas fa-video"></i> Online Consult</span>
                     </div>
                 </div>
             </div>
-            <div class="card-content">
-                <div style="display:flex; justify-content:space-between; align-items:start;">
-                    <h3 class="card-title">${item.name}</h3>
-                    ${item.approved ? '<i class="fas fa-check-circle" style="color:#3498db; margin-top:5px;" title="Admin Verified"></i>' : ''}
+            
+            <div style="display:flex; align-items:center; gap:15px; padding-top:15px; border-top:1px solid var(--border); margin-top:5px;">
+                <div style="flex:1;">
+                    <div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">
+                        <span style="background:var(--secondary); color:white; padding:2px 6px; border-radius:4px; font-size:0.8rem; font-weight:700;">${rating} <i class="fas fa-star" style="font-size:0.7rem;"></i></span>
+                        <span style="font-size:0.8rem; color:var(--text-muted); text-decoration:underline;">${reviews} Patient Stories</span>
+                    </div>
+                    <p style="font-size:0.8rem; color:#666;"><i class="fas fa-location-dot"></i> ${item.address || 'Mumbai, MH'}</p>
                 </div>
-                <div style="display:flex; gap:10px; margin-bottom:10px;">
-                    <span class="role-badge" style="font-size:0.6rem;">${item.specialty || 'General'}</span>
-                    <span class="role-badge" style="background:#e8f5e9; color:#2ecc71; font-size:0.6rem;">Available Today</span>
-                </div>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom:15px;"><i class="fas fa-location-dot"></i> ${item.address || 'Mumbai, India'}</p>
-                <div class="card-footer">
-                    <div class="card-price">₹${item.price || '500'} <span>/${AppState.currentType === 'doctors' ? 'Visit' : 'Test'}</span></div>
-                    <button class="btn-book" onclick="event.stopPropagation(); openBooking('${item.id}')">Book Now</button>
+                <div style="text-align:right;">
+                    <p style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Book for ₹${item.price || 500}</p>
+                    <button class="btn-signup" style="padding:10px 25px;" onclick="event.stopPropagation(); openBooking('${item.id}')">Book Now</button>
                 </div>
             </div>
         </div>

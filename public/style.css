@@ -1,27 +1,33 @@
 :root {
-    /* Zomato Red Palette */
-    --primary: #E23744;
-    --primary-dark: #CB202D;
-    --primary-light: #FFF5F6;
-    --secondary: #1C1C1C;
-    --accent: #E23744;
-    --accent-light: #FFF0F2;
-    --bg-light: #F8F8F8;
-    --text-main: #1C1C1C;
-    --text-muted: #696969;
+    /* Core Theme - Practo Style */
+    --primary: #2A7DE1;
+    /* Medical Blue */
+    --primary-hover: #1e6acc;
+    --primary-light: #eef6ff;
+    --secondary: #4CAF50;
+    /* Health Green */
+    --secondary-hover: #43a047;
+    --secondary-light: #f0fdf4;
+    --accent: #FF9800;
+    /* Warning/Action Orange */
+
+    --text-main: #1A1C1E;
+    --text-muted: #6B7280;
+    --bg-light: #F8FAFC;
     --white: #FFFFFF;
-    --glass: rgba(255, 255, 255, 0.95);
-    --shadow-soft: 0 4px 12px rgba(226, 55, 68, 0.08);
-    --shadow-medium: 0 8px 24px rgba(226, 55, 68, 0.12);
-    --transition-fast: all 0.2s ease;
-    --transition-smooth: all 0.3s ease-in-out;
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
-    --glass-bg: rgba(255, 255, 255, 0.8);
-    --glass-border: rgba(255, 255, 255, 0.2);
-    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+    --border: #E2E8F0;
+
+    /* Shadows & Radii */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+
+    --glass-bg: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(255, 255, 255, 0.4);
+    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
 }
 
 /* Custom Scrollbar for Premium Feel */
@@ -78,13 +84,19 @@ html {
 }
 
 body {
-    background-color: var(--white);
+    background-color: var(--bg-light);
     color: var(--text-main);
-    overflow-x: hidden;
     line-height: 1.6;
+    overflow-x: hidden;
+    font-weight: 400;
     overscroll-behavior-y: none;
     /* App feel */
     -webkit-tap-highlight-color: transparent;
+}
+
+#main-content {
+    background: #fff;
+    min-height: 100vh;
 }
 
 /* App-like interactions */
@@ -178,7 +190,7 @@ a {
 }
 
 .logo-text span {
-    color: var(--primary);
+    color: var(--secondary);
 }
 
 .user-actions {
@@ -228,21 +240,18 @@ a {
 
 .btn-signup {
     background: var(--primary);
-    color: var(--white);
-    padding: 12px 24px;
+    color: #fff;
+    padding: 12px 28px;
     border-radius: var(--radius-md);
-    border: none;
-    cursor: pointer;
-    font-weight: 700;
-    font-size: 1rem;
-    transition: var(--transition-smooth);
-    box-shadow: 0 4px 15px rgba(44, 62, 80, 0.15);
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(42, 125, 225, 0.2);
 }
 
 .btn-signup:hover {
-    background: var(--primary-dark);
+    background: var(--primary-hover);
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(226, 55, 68, 0.3);
+    box-shadow: 0 6px 12px rgba(42, 125, 225, 0.25);
 }
 
 /* Hero Section */
@@ -367,19 +376,31 @@ a {
     gap: 30px;
 }
 
+/* Category Cards Refinement */
 .category-card {
-    height: 250px;
+    background: var(--white);
+    padding: 24px 16px;
     border-radius: var(--radius-lg);
-    overflow: hidden;
-    position: relative;
-    cursor: pointer;
-    transition: var(--transition-smooth);
-    border: 1px solid #F5F5F5;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .category-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+}
+
+.cat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 18px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
 }
 
 .cat-image {
