@@ -1,15 +1,12 @@
 :root {
-    /* Core Theme - Practo Style */
-    --primary: #2A7DE1;
-    /* Medical Blue */
-    --primary-hover: #1e6acc;
-    --primary-light: #eef6ff;
-    --secondary: #4CAF50;
-    /* Health Green */
-    --secondary-hover: #43a047;
-    --secondary-light: #f0fdf4;
+    /* Core Theme - Zomato Red */
+    --primary: #E23744;
+    --primary-hover: #CB202D;
+    --primary-light: #FFF5F6;
+    --secondary: #2D2D2D;
+    --secondary-hover: #1C1C1C;
+    --secondary-light: #F8F8F8;
     --accent: #FF9800;
-    /* Warning/Action Orange */
 
     --text-main: #1A1C1E;
     --text-muted: #6B7280;
@@ -124,7 +121,7 @@ h1,
 h2,
 h3,
 h4 {
-    color: var(--secondary);
+    color: #1A1C1E;
     font-weight: 700;
 }
 
@@ -190,7 +187,7 @@ a {
 }
 
 .logo-text span {
-    color: var(--secondary);
+    color: var(--primary);
 }
 
 .user-actions {
@@ -245,19 +242,19 @@ a {
     border-radius: var(--radius-md);
     font-weight: 600;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 6px rgba(42, 125, 225, 0.2);
+    box-shadow: 0 4px 6px rgba(226, 55, 68, 0.2);
 }
 
 .btn-signup:hover {
     background: var(--primary-hover);
     transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(42, 125, 225, 0.25);
+    box-shadow: 0 6px 12px rgba(226, 55, 68, 0.25);
 }
 
 /* Hero Section */
 .hero {
     padding: 100px 0 60px;
-    background: radial-gradient(circle at top right, #FFF5F6, #FFFFFF);
+    background: radial-gradient(circle at top right, #FFF5F6, #FFFFFF 60%);
     text-align: center;
     position: relative;
 }
