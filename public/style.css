@@ -381,6 +381,12 @@ a {
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--border);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
 }
 
 .category-card:hover {
@@ -587,7 +593,7 @@ a {
 
 /* Dashboard Layouts */
 .role-section {
-    padding: 60px 0;
+    padding: 0;
     min-height: 80vh;
 }
 
@@ -2126,4 +2132,193 @@ h2 {
     height: 20px;
     background: var(--primary);
     border-radius: 4px;
+}
+
+/* =============================================
+   RESPONSIVE ALIGNMENT FIXES
+   ============================================= */
+
+/* Tablet & Small Desktop: 768px - 1024px */
+@media (max-width: 1024px) {
+    .hero-section h1 {
+        font-size: 2.2rem !important;
+    }
+
+    .cat-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+
+    .test-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .app-download {
+        flex-direction: column !important;
+        padding: 50px !important;
+    }
+
+    footer .container:first-of-type {
+        grid-template-columns: 1fr 1fr !important;
+    }
+}
+
+/* Mobile: up to 768px */
+@media (max-width: 768px) {
+
+    /* Navbar: hide desktop nav links */
+    .nav-links.desktop-only {
+        display: none !important;
+    }
+
+    .desktop-only {
+        display: none !important;
+    }
+
+    /* Hero */
+    .hero-section {
+        padding: 40px 20px 30px !important;
+    }
+
+    .hero-section h1 {
+        font-size: 1.75rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .hero-section p {
+        font-size: 0.95rem !important;
+    }
+
+    .search-bar-wrapper {
+        flex-direction: column !important;
+        padding: 15px !important;
+        gap: 10px !important;
+        border-radius: 16px !important;
+    }
+
+    .location-btn {
+        border-right: none !important;
+        border-bottom: 1px solid var(--border) !important;
+        padding-right: 0 !important;
+        padding-bottom: 10px !important;
+        width: 100% !important;
+    }
+
+    .search-input-box {
+        padding-left: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Speciality Grid: 3 cols on mobile */
+    .cat-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 12px !important;
+    }
+
+    .category-card {
+        padding: 16px 10px !important;
+    }
+
+    .cat-icon {
+        width: 48px !important;
+        height: 48px !important;
+        font-size: 1.3rem !important;
+    }
+
+    .category-card span {
+        font-size: 0.75rem !important;
+    }
+
+    /* Lab test grid → 2 cols */
+    .test-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 15px !important;
+    }
+
+    /* Testimonials → 1 col */
+    .testimonials>div:last-child {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* App Download → stacked */
+    .app-download {
+        flex-direction: column !important;
+        padding: 40px 25px !important;
+        text-align: center !important;
+    }
+
+    .app-download h2 {
+        font-size: 1.8rem !important;
+    }
+
+    .app-download div:first-child>div {
+        justify-content: center !important;
+    }
+
+    /* Section headings */
+    .dashboard-categories .container,
+    .lab-tests .container {
+        padding: 0 16px !important;
+    }
+
+    /* Footer → stacked */
+    footer>.container:first-of-type {
+        grid-template-columns: 1fr !important;
+        gap: 30px !important;
+    }
+
+    footer {
+        padding: 50px 0 20px !important;
+    }
+
+    /* Grid */
+    .grid-container {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Doctor/lab card */
+    .card,
+    .doctor-card {
+        min-width: unset !important;
+    }
+
+    /* Admin / doctor stats grid */
+    .stats-grid {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* Container breathing room */
+    .container {
+        padding: 0 16px !important;
+    }
+
+    /* Section spacing */
+    section.container,
+    section .container {
+        padding-top: 0 !important;
+    }
+}
+
+/* Extra small: up to 480px */
+@media (max-width: 480px) {
+    .cat-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 10px !important;
+    }
+
+    .test-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .hero-section h1 {
+        font-size: 1.5rem !important;
+    }
+
+    .btn-signup {
+        padding: 10px 18px !important;
+        font-size: 0.85rem !important;
+    }
+
+    .logo-text {
+        font-size: 1.2rem !important;
+    }
 }
