@@ -1488,7 +1488,7 @@ window.updatePatientDashboard = async function () {
         } else {
             reportsList.innerHTML = latestReports.map(r => `
                 <div class="tile-item" style="padding: 15px; background: #fff; border: 1px solid #f0f0f0; border-radius: 15px; margin-bottom: 10px; cursor: pointer;" onclick="window.open('${r.url}', '_blank')">
-                    <div style="width: 45px; height: 45px; background: #f0f7ff; color: #007bff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                    <div style="width: 45px; height: 45px; background: var(--primary-light); color: var(--primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
                         <i class="fas fa-file-pdf"></i>
                     </div>
                     <div class="tile-info" style="flex: 1; margin-left: 15px;">
@@ -1771,10 +1771,10 @@ function renderDoctorDashboard() {
                 <span style="font-size:0.7rem; color:#e67e22;">Waiting for Admin</span>
             </div>
             <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <i class="fas fa-clock" style="color:#3498db; font-size:1.5rem; margin-bottom:10px;"></i>
+                <i class="fas fa-clock" style="color:var(--primary); font-size:1.5rem; margin-bottom:10px;"></i>
                 <h3>₹${netUpcoming}</h3>
                 <p style="color:var(--text-muted); font-size:0.9rem;">Upcoming (1 Week Wait)</p>
-                <span style="font-size:0.7rem; color:#3498db;">Processing...</span>
+                <span style="font-size:0.7rem; color:var(--primary);">Processing...</span>
             </div>
             <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
                 <i class="fas fa-wallet" style="color:#2ecc71; font-size:1.5rem; margin-bottom:10px;"></i>
@@ -2043,7 +2043,7 @@ window.openDetailsView = function (itemId, type) {
             `<img src="${item.image}" style="width:120px; height:120px; border-radius:50%; object-fit:cover; margin:-20px auto 15px; border:4px solid white; box-shadow:0 4px 15px rgba(0,0,0,0.1);">` :
             `<div class="profile-img-large" style="width:100px; height:100px; margin:-20px auto 15px; border:4px solid white;">${initials}</div>`
         }
-                <h2 style="margin-bottom:5px;">${item.name} ${item.approved ? '<i class="fas fa-certificate" style="color:#3498db; font-size:1.2rem;" title="Verified"></i>' : ''}</h2>
+                <h2 style="margin-bottom:5px;">${item.name} ${item.approved ? '<i class="fas fa-certificate" style="color:var(--primary); font-size:1.2rem;" title="Verified"></i>' : ''}</h2>
                 <p style="color:var(--primary); font-weight:600;">${item.specialty || 'Professional'}</p>
                 <div style="display:flex; justify-content:center; gap:15px; margin-top:15px;">
                     <span style="font-size:0.8rem; background:white; padding:5px 12px; border-radius:20px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
@@ -2463,7 +2463,7 @@ function renderLabDashboard() {
                 <p style="color:var(--text-muted); font-size:0.9rem;">Pending Settlement</p>
             </div>
             <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <i class="fas fa-clock" style="color:#3498db; font-size:1.5rem; margin-bottom:10px;"></i>
+                <i class="fas fa-clock" style="color:var(--primary); font-size:1.5rem; margin-bottom:10px;"></i>
                 <h3>₹${netUpcoming}</h3>
                 <p style="color:var(--text-muted); font-size:0.9rem;">Upcoming (1 Week Wait)</p>
             </div>
@@ -2713,8 +2713,8 @@ function renderAdminDashboard() {
             </div>
             <div class="admin-stat-card">
                 <div style="display:flex; justify-content:space-between;">
-                    <h3 style="color:#3498db;">₹${totalEscrowHeld}</h3>
-                    <i class="fas fa-lock" style="color:#3498db;"></i>
+                    <h3 style="color:var(--primary);">₹${totalEscrowHeld}</h3>
+                    <i class="fas fa-lock" style="color:var(--primary);"></i>
                 </div>
                 <p>Funds held in Escrow</p>
             </div>
@@ -2741,7 +2741,7 @@ function renderAdminDashboard() {
                         <p>${p.specialty || 'Provider'} • ${userObj?.email || 'No email'}</p>
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <button class="btn-book" style="background:#3498db; padding:8px 15px;" onclick="viewProviderDetails('${p.id}', '${p.collection}')"><i class="fas fa-eye"></i> View</button>
+                        <button class="btn-book" style="background:var(--primary); padding:8px 15px;" onclick="viewProviderDetails('${p.id}', '${p.collection}')"><i class="fas fa-eye"></i> View</button>
                         <button class="btn-book" style="padding:8px 15px;" onclick="approveProvider('${p.id}', '${p.collection}')">Approve</button>
                     </div>
                 </div>
@@ -3168,7 +3168,7 @@ function renderUserListHTML(users) {
 
         let roleColor = '#2ecc71'; // patient green
         if (userRole === 'doctor') roleColor = '#e23744'; // doc red
-        if (userRole === 'lab') roleColor = '#3498db'; // lab blue
+        if (userRole === 'lab') roleColor = 'var(--primary)'; // lab blue
         if (userRole === 'admin') roleColor = '#9b59b6'; // admin purple
 
         return `
@@ -3461,7 +3461,7 @@ function simulateNotification(type, message) {
     // Show a small indicator or toast
     if (AppState.user && AppState.user.role === 'patient') {
         const icon = type === 'whatsapp' ? 'fa-whatsapp' : 'fa-comment-alt';
-        const color = type === 'whatsapp' ? '#25D366' : '#3498db';
+        const color = type === 'whatsapp' ? '#25D366' : 'var(--primary)';
         showToast(`<i class="fab ${icon}" style="color:${color}"></i> ${message}`, "success");
     }
 }
@@ -3959,22 +3959,9 @@ window.showProfileSub = function (sub, event) {
     if (event) event.currentTarget.classList.add('active');
 };
 
-// --- Sidebar Helper Functions ---
-window.toggleSidebar = () => {
-    const sidebar = document.getElementById('app-sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
-    if (sidebar) sidebar.classList.toggle('active');
-    if (overlay) overlay.classList.toggle('active');
-};
-
-window.handleSidebarAction = (action) => {
-    toggleSidebar();
-    showToast(`Accessing ${action}...`);
-    // Specific logic per action can go here
-};
-
+// --- Helper Functions ---
 window.handleLogout = () => {
-    toggleSidebar();
+    if (typeof toggleSidebar === 'function') toggleSidebar();
     auth.signOut().then(() => showToast("Logged out successfully"));
 };
 
