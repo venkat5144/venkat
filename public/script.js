@@ -133,6 +133,7 @@ const AppState = {
     users: [], // New state for joining email data
     currentOnboardingStep: 1,
     onboardingData: {},
+    cms_lab_offers: [],
 };
 
 // --- DOM Elements ---
@@ -315,17 +316,35 @@ function setupRealtimeSync() {
         refreshActiveDashboard();
     }, err => console.warn("Lab Sync Error:", err.message));
 
+    // Listen for All Users (Admin joining)
+    db.collection('users').onSnapshot(snap => {
+        const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        AppState.users = users;
+
+        // CRITICAL: Synchronize the logged-in user state if their data changed
+        if (AppState.user) {
+            const freshMe = users.find(u => u.id === AppState.user.id);
+            if (freshMe) {
+                AppState.user = { ...AppState.user, ...freshMe };
+            }
+        }
+
+        refreshActiveDashboard();
+        updateSidebarUI(); // Refresh sidebar in case current user data changed
+    }, err => console.warn("Users Sync Error:", err.message));
+
     // Listen for Appointments (Global for updates)
     db.collection('appointments').onSnapshot(snap => {
         AppState.appointments = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         refreshActiveDashboard();
     }, err => console.warn("Appointment Sync Error:", err.message));
 
-    // Listen for All Users (Admin joining)
-    db.collection('users').onSnapshot(snap => {
-        AppState.users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        refreshActiveDashboard();
-    }, err => console.warn("Users Sync Error:", err.message));
+    // Listen for CMS Lab Offers
+    db.collection('cms_lab_offers').orderBy('order', 'asc').onSnapshot(snap => {
+        AppState.cms_lab_offers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderCMSLabOffers();
+        renderAdminCMSLabOffers(); // Update admin view too
+    }, err => console.warn("CMS Sync Error:", err.message));
 }
 
 // --- Authentication Logic ---
@@ -868,6 +887,16 @@ window.setSpecialty = function (spec) {
     AppState.activeFilters.category = spec;
     DOM.sectionTitle.innerText = `${spec} Specialists`;
     renderGrid();
+    showPatientTab('home');
+    document.getElementById('list-section').scrollIntoView({ behavior: 'smooth' });
+};
+
+window.setLabType = function (spec) {
+    AppState.currentType = 'labs';
+    AppState.activeFilters.category = spec;
+    DOM.sectionTitle.innerText = `${spec} Services`;
+    renderGrid();
+    showPatientTab('home');
     document.getElementById('list-section').scrollIntoView({ behavior: 'smooth' });
 };
 
@@ -927,6 +956,7 @@ function setupEventListeners() {
         const phone = document.getElementById('reg-phone').value.trim();
         const role = document.getElementById('reg-role').value;
         const pass = document.getElementById('reg-pass').value.trim();
+        const specialty = document.getElementById('reg-specialty').value;
 
         try {
             const cred = await auth.createUserWithEmailAndPassword(email, pass);
@@ -938,14 +968,26 @@ function setupEventListeners() {
                 const specificData = {
                     id: cred.user.uid,
                     name,
-                    specialty: role === 'doctor' ? "General Physician" : "Full Body Diagnostics",
+                    specialty: role === 'doctor' ? (specialty || "General Physician") : "Full Body Diagnostics",
                     image: role === 'doctor' ? "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=500&q=80" : "https://images.unsplash.com/photo-1511174511562-5f7f18b874f8?auto=format&fit=crop&w=500&q=80",
                     price: role === 'doctor' ? "500" : "999",
-                    approved: false
+                    approved: false,
+                    humanId: `HM-${role.charAt(0).toUpperCase()}-${cred.user.uid.slice(0, 4).toUpperCase()}`
                 };
                 await db.collection(role + 's').doc(cred.user.uid).set(specificData);
+
+                // Also update user doc with humanId
+                await db.collection('users').doc(cred.user.uid).update({ humanId: specificData.humanId });
+
+                // Show verification pending toast
+                showToast("Verification Pending! Admin will review your profile.", "warning");
+            } else {
+                const humanId = `HM-P-${cred.user.uid.slice(0, 4).toUpperCase()}`;
+                await db.collection('users').doc(cred.user.uid).update({ humanId });
+                showToast("Account created! Welcome to HealthMate.");
             }
-            showToast("Account created! Welcome to HealthMate.");
+
+            DOM.authOverlay.classList.add('hidden');
         } catch (err) {
             showToast(err.message, "error");
         }
@@ -1259,58 +1301,165 @@ window.downloadInvoice = function (id, token) {
 
 
 // --- Ratings & Reviews ---
-window.openReviewModal = function (appId, targetName) {
+window.openReviewModal = async function (appId, targetName) {
+    const app = AppState.appointments.find(a => a.id === appId);
+    if (!app) return;
+
+    let googleLink = "";
+    try {
+        const pType = app.type === 'doctors' ? 'doctors' : 'labs';
+        const pDoc = await db.collection(pType).doc(app.targetId).get();
+        if (pDoc.exists && pDoc.data().googleReviewLink) {
+            googleLink = pDoc.data().googleReviewLink;
+        }
+    } catch (e) { console.warn("Google link fetch fail", e); }
+
     DOM.modalBody.innerHTML = `
         <div style="text-align: center;">
-            <h3>Rate your experience</h3>
-            <p>How was your visit with <strong>${targetName}</strong>?</p>
-            <div class="rating-input" id="rating-stars-input">
+            <h3 style="margin-bottom:10px;">Rate your experience</h3>
+            <p style="margin-bottom:20px;">How was your visit with <strong>${targetName}</strong>?</p>
+            
+            <div id="rating-stars-input" style="font-size: 2rem; color: #ddd; cursor: pointer; margin-bottom: 25px;">
                 <i class="fas fa-star" data-value="1"></i>
                 <i class="fas fa-star" data-value="2"></i>
                 <i class="fas fa-star" data-value="3"></i>
                 <i class="fas fa-star" data-value="4"></i>
                 <i class="fas fa-star" data-value="5"></i>
             </div>
-            <textarea id="review-text" placeholder="Share your feedback..." 
-                style="width: 100%; padding: 15px; border-radius: 12px; border: 1.5px solid #EEE; margin-bottom: 20px; outline: none;"></textarea>
-            <button class="btn-signup" style="width: 100%;" onclick="submitReview('${appId}')">Submit Review</button>
+
+            <textarea id="review-text" placeholder="Share your internal feedback..." 
+                style="width: 100%; padding: 15px; border-radius: 12px; border: 1.5px solid #EEE; margin-bottom: 20px; outline: none; transition: 0.3s;"></textarea>
+            
+            <button class="btn-signup" style="width: 100%; margin-bottom:15px; font-weight:700;" onclick="submitReview('${appId}')">Submit Internal Review</button>
+            
+            ${googleLink ? `
+            <div style="margin: 20px 0; padding-top:20px; border-top: 1px dashed #eee;">
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">Also help them on Google!</p>
+                <a href="${googleLink}" target="_blank" class="btn-signup" 
+                   style="background:#4285F4; color:white; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:10px; width:100%; font-weight:700;">
+                    <i class="fab fa-google"></i> Leave a Google Review
+                </a>
+            </div>` : ''}
         </div>
     `;
     DOM.modal.classList.remove('hidden');
 
     // Star logic
+    let currentRating = 0;
     const stars = document.querySelectorAll('#rating-stars-input i');
     stars.forEach(s => {
         s.onclick = () => {
-            stars.forEach(st => st.classList.remove('active'));
-            const val = s.dataset.value;
-            for (let i = 0; i < val; i++) stars[i].classList.add('active');
-            AppState.tempRating = val;
+            currentRating = s.dataset.value;
+            stars.forEach(st => {
+                if (parseInt(st.dataset.value) <= parseInt(currentRating)) {
+                    st.style.color = "#F1C40F";
+                } else {
+                    st.style.color = "#ddd";
+                }
+            });
+            window._tempRating = currentRating;
         };
     });
 };
 
 window.submitReview = async function (appId) {
-    const rating = AppState.tempRating || 5;
+    const rating = window._tempRating || 5;
     const text = document.getElementById('review-text').value;
 
     try {
+        const appDoc = await db.collection('appointments').doc(appId).get();
+        const app = appDoc.data();
+        if (!app) throw new Error("Appointment not found");
+
         await db.collection('reviews').add({
             appointmentId: appId,
+            patientId: AppState.user.id,
+            patientName: AppState.user.name,
+            targetId: app.targetId,
+            targetName: app.targetName,
             rating: parseInt(rating),
             comment: text,
-            patientName: AppState.user.name,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
         // Mark appointment as reviewed
         await db.collection('appointments').doc(appId).update({ reviewed: true });
 
-        showToast("Thank you for your feedback!");
-        DOM.modal.classList.add('hidden');
+        showToast("Thank you for your feedback!", "success");
+        if (DOM.modal) DOM.modal.classList.add('hidden');
+
+        // Refresh both history and portal
         refreshPatientHistory();
+        refreshReviewsPortal();
     } catch (err) {
-        showToast("Review failed", "error");
+        console.error("Review Error:", err);
+        showToast("Review failed: " + err.message, "error");
+    }
+};
+
+window.refreshReviewsPortal = async function () {
+    if (!AppState.user) return;
+    console.log("[PORTAL] Refreshing Reviews Portal...");
+
+    try {
+        // 1. Pending Reviews (Approved but not reviewed)
+        const pendingList = document.getElementById('pending-reviews-list');
+        const pendingSec = document.getElementById('pending-reviews-section');
+
+        const pending = AppState.appointments.filter(a => a.status === 'approved' && !a.reviewed);
+
+        if (pending.length > 0) {
+            pendingSec.classList.remove('hidden');
+            pendingList.innerHTML = pending.map(a => `
+                <div class="tile-item" style="border-left: 5px solid var(--accent);">
+                    <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.2rem;">
+                        <i class="fas fa-star-half-alt"></i>
+                    </div>
+                    <div class="tile-info">
+                        <h4 style="margin:0;">Pending: ${a.targetName}</h4>
+                        <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">Visit date: ${a.date} | ${a.time}</p>
+                    </div>
+                    <button class="btn-signup btn-small" onclick="openReviewModal('${a.id}', '${a.targetName}')">Rate Now</button>
+                </div>
+            `).join('');
+        } else {
+            pendingSec.classList.add('hidden');
+        }
+
+        // 2. My Shared Feedbacks
+        const sharedList = document.getElementById('my-shared-reviews');
+        const revSnap = await db.collection('reviews')
+            .where('patientId', '==', AppState.user.id)
+            .orderBy('createdAt', 'desc')
+            .limit(10)
+            .get();
+
+        if (revSnap.empty) {
+            sharedList.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted); background:#fafafa; border-radius:15px; border:1px dashed #ddd;">
+                <i class="fas fa-feather-alt" style="font-size:2rem; margin-bottom:15px; opacity:0.3;"></i>
+                <p>No feedbacks shared yet. Your voice matters!</p>
+            </div>`;
+        } else {
+            sharedList.innerHTML = revSnap.docs.map(doc => {
+                const r = doc.data();
+                return `
+                <div class="tile-item" style="align-items:flex-start; gap:20px; padding:20px;">
+                    <div style="flex:1;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                            <h4 style="margin:0; color:var(--primary);">${r.targetName}</h4>
+                            <div style="color:#f1c40f; font-size:0.8rem;">
+                                ${Array(5).fill(0).map((_, i) => `<i class="${i < r.rating ? 'fas' : 'far'} fa-star"></i>`).join('')}
+                            </div>
+                        </div>
+                        <p style="margin:0; font-size:0.95rem; color:#444; line-height:1.5;">"${r.comment || 'No comment provided.'}"</p>
+                        <p style="margin-top:10px; font-size:0.75rem; color:var(--text-muted); font-weight:600;">Shared on ${r.createdAt ? r.createdAt.toDate().toLocaleDateString() : 'Just now'}</p>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+    } catch (err) {
+        console.error("Reviews Portal Error:", err);
     }
 };
 
@@ -1331,6 +1480,8 @@ window.showPatientSection = function (tab, event) {
         targetTab.classList.remove('hidden');
         requestAnimationFrame(() => targetTab.style.opacity = '1');
     }
+
+    if (tab === 'reviews') refreshReviewsPortal();
 
     // Highlight Navigation (Mobile Bottom Nav)
     document.querySelectorAll('.mobile-bottom-nav .nav-item').forEach(item => {
@@ -1543,12 +1694,11 @@ window.savePatientProfile = async function () {
         });
 
         AppState.user = { ...AppState.user, name, phone, image: photoURL };
-        showToast("Profile Updated Successfully!");
-
-        // Full UI refresh to sync all elements (navbar, sidebar, tab previews)
+        updateSidebarUI(); // Refresh sidebar with new photo/name
+        showToast("Profile updated successfully!", "success");
         applyUserSession();
     } catch (err) {
-        showToast("Update failed: " + err.message, "error");
+        showToast("Save failed: " + err.message, "error");
     }
 };
 
@@ -2290,6 +2440,7 @@ window.saveDoctorProfile = async function () {
             price: fee,
             address: address,
             mapUrl: mapUrl,
+            googleReviewLink: document.getElementById('doc-profile-review').value,
             image: photoURL,
             lat, lng
         };
@@ -2327,6 +2478,7 @@ window.saveLabProfile = async function () {
             price: fee,
             address: address,
             mapUrl: mapUrl,
+            googleReviewLink: document.getElementById('lab-profile-review').value,
             image: photoURL,
             lat, lng
         };
@@ -3095,7 +3247,7 @@ function renderUserListHTML(users) {
                         ${initial}
                     </div>
                     <div>
-                        <h4 style="margin:0; font-size:1rem;">${userName}</h4>
+                        <h4 style="margin:0; font-size:1rem;">${userName} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:500;">(${u.humanId || 'ID: ' + u.id.slice(0, 6)})</span></h4>
                         <p style="font-size:0.75rem; color:var(--text-muted); margin:2px 0;">${userEmail}</p>
                         <span class="role-badge" style="background:${roleColor}11; color:${roleColor}; font-size:0.65rem; padding:2px 10px; border-radius:50px; font-weight:700;">${userRole.toUpperCase()}</span>
                     </div>
@@ -3155,6 +3307,7 @@ window.showAdminTab = function (tab, event) {
     if (tab === 'verifications') renderVerifications();
     if (tab === 'users') renderAdminUsers();
     if (tab === 'financials') renderAdminFinancials();
+    if (tab === 'cms') renderAdminCMSLabOffers(); // Added for CMS
 };
 
 window.renderAdminFinancials = function () {
@@ -3419,6 +3572,30 @@ window.toggleAuth = function (type) {
     } else {
         DOM.loginCard.classList.add('hidden');
         DOM.registerCard.classList.remove('hidden');
+        toggleRegExtraFields(); // Reset state for registration fields
+    }
+};
+
+window.toggleRegExtraFields = function () {
+    const role = document.getElementById('reg-role').value;
+    const specGroup = document.getElementById('reg-specialty-group');
+    const docOpts = document.getElementById('opt-doc-specialties');
+    const labOpts = document.getElementById('opt-lab-specialties');
+
+    if (role === 'doctor' || role === 'lab') {
+        specGroup.classList.remove('hidden');
+        document.getElementById('reg-specialty').setAttribute('required', 'true');
+
+        if (role === 'doctor') {
+            docOpts.classList.remove('hidden');
+            labOpts.classList.add('hidden');
+        } else {
+            docOpts.classList.add('hidden');
+            labOpts.classList.remove('hidden');
+        }
+    } else {
+        specGroup.classList.add('hidden');
+        document.getElementById('reg-specialty').removeAttribute('required');
     }
 };
 
@@ -3535,6 +3712,7 @@ window.showPatientSection = function (section, event) {
     }
 
     if (section === 'lab-tests') renderLabTests();
+    if (section === 'reviews') refreshReviewsPortal();
 
     // Update Nav UI
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -3564,6 +3742,7 @@ window.showPatientTab = function (tab) {
     if (tab === 'home') showPatientSection('home');
     if (tab === 'history') refreshPatientHistory();
     if (tab === 'reports') refreshPatientRecords();
+    if (tab === 'reviews') refreshReviewsPortal();
 };
 
 // --- Pharmacy Feature ---
@@ -3859,6 +4038,7 @@ window.savePatientProfile = async function () {
     try {
         await db.collection('users').doc(AppState.user.id).update(data);
         AppState.user = { ...AppState.user, ...data };
+        updateSidebarUI(); // Refresh sidebar with new photo/name
         showToast("Profile updated successfully!", "success");
         applyUserSession();
     } catch (err) {
@@ -3885,23 +4065,153 @@ function updateSidebarUI() {
     const nameEl = document.getElementById('sidebar-user-name');
     const idEl = document.getElementById('sidebar-user-id');
     const photoEl = document.getElementById('sidebar-user-photo');
+    const mobilePhotoEl = document.getElementById('mobile-nav-user-photo');
 
-    if (!nameEl || !idEl || !photoEl) return;
+    // Profile Page Elements
+    const profileImgDisp = document.getElementById('profile-img-disp');
+    const patientProfilePrev = document.getElementById('patient-profile-preview');
+    const profileNameDisp = document.getElementById('profile-name-disp');
+    const profileEmailDisp = document.getElementById('profile-email-disp');
+
+    const fallbackImg = "https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=200&q=80";
 
     if (AppState.user) {
-        nameEl.innerText = (AppState.user.name || "HEALTH USER").toUpperCase();
-        idEl.innerText = `ID: HM-${AppState.user.id.slice(0, 6).toUpperCase()}`;
-        if (AppState.user.image) {
-            photoEl.src = AppState.user.image;
-        } else {
-            photoEl.src = "https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=200&q=80";
+        const u = AppState.user;
+        const displayName = (u.name || "HEALTH USER").toUpperCase();
+        const displayId = u.humanId || `HM-${u.role?.charAt(0).toUpperCase() || 'U'}-${u.id.slice(0, 4).toUpperCase()}`;
+        const displayImg = u.image || fallbackImg;
+
+        // Update Sidebar
+        if (nameEl) nameEl.innerText = displayName;
+        if (idEl) idEl.innerText = displayId;
+        if (photoEl) photoEl.src = displayImg;
+
+        // Update Mobile Nav Profile (Add actual photo)
+        if (mobilePhotoEl) {
+            if (mobilePhotoEl.tagName === 'I') {
+                const img = document.createElement('img');
+                img.id = 'mobile-nav-user-photo';
+                img.src = displayImg;
+                img.style = "width:24px; height:24px; border-radius:50%; object-fit:cover;";
+                mobilePhotoEl.replaceWith(img);
+            } else {
+                mobilePhotoEl.src = displayImg;
+            }
         }
+
+        // Fill Profile Section placeholders
+        if (profileImgDisp) profileImgDisp.innerHTML = `<img src="${displayImg}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+        if (patientProfilePrev) patientProfilePrev.innerHTML = `<img src="${displayImg}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+        if (profileNameDisp) profileNameDisp.innerText = displayName;
+        if (profileEmailDisp) profileEmailDisp.innerText = u.email || "";
+
     } else {
-        nameEl.innerText = "GUEST USER";
-        idEl.innerText = "ID: HM-000000";
-        photoEl.src = "https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=200&q=80";
+        if (nameEl) nameEl.innerText = "GUEST USER";
+        if (idEl) idEl.innerText = "ID: HM-G-0000";
+        if (photoEl) photoEl.src = fallbackImg;
     }
 }
+
+// --- CMS Functions ---
+window.renderCMSLabOffers = function () {
+    const container = document.getElementById('cms-lab-offers-grid');
+    if (!container) return;
+
+    if (AppState.cms_lab_offers.length === 0) {
+        // Fallback or seed message
+        container.innerHTML = '<p style="grid-column: 1/-1; text-align:center; padding:40px; color:var(--text-muted);">No lab offers available at the moment.</p>';
+        seedDefaultLabOffers();
+        return;
+    }
+
+    container.innerHTML = AppState.cms_lab_offers.map(offer => `
+        <div class="category-card" style="text-align:left; padding:35px; border-radius: 20px;" onclick="setCategory('labs')">
+            <div style="width:60px; height:60px; background:${offer.bg || '#eef2ff'}; color:${offer.color || 'var(--primary)'}; border-radius:15px; display:flex; align-items:center; justify-content:center; font-size:1.8rem; margin-bottom:25px;">
+                <i class="fas ${offer.icon || 'fa-vial'}"></i>
+            </div>
+            <h3 style="font-size:1.2rem; margin-bottom:12px; font-weight:700;">${offer.title}</h3>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px; line-height:1.5;">${offer.desc}</p>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:800; color:var(--primary); font-size:1.1rem;">₹${offer.price}/-</span>
+                ${offer.badge ? `<span style="font-size:0.75rem; color:var(--secondary); font-weight:700;"><i class="fas fa-check"></i> ${offer.badge}</span>` : ''}
+            </div>
+        </div>
+    `).join('');
+};
+
+window.renderAdminCMSLabOffers = function () {
+    const list = document.getElementById('admin-cms-lab-offers');
+    if (!list) return;
+
+    list.innerHTML = AppState.cms_lab_offers.map(offer => `
+        <div class="tile-item">
+            <div style="width:40px; height:40px; background:${offer.bg}; color:${offer.color}; border-radius:8px; display:flex; align-items:center; justify-content:center;">
+                <i class="fas ${offer.icon}"></i>
+            </div>
+            <div class="tile-info">
+                <h4 style="margin:0;">${offer.title}</h4>
+                <p style="margin:0; font-size:0.7rem;">₹${offer.price} | ${offer.badge || 'No badge'}</p>
+            </div>
+            <button class="btn-small" style="background:#e74c3c; border:none; color:white; padding:5px 10px;" onclick="deleteLabOffer('${offer.id}')"><i class="fas fa-trash"></i></button>
+        </div>
+    `).join('');
+};
+
+async function seedDefaultLabOffers() {
+    const defaults = [
+        { title: "Full Body Checkup", desc: "Complete screening of 60+ parameters including liver & kidney.", price: "999", icon: "fa-vial", bg: "#eef2ff", color: "var(--primary)", badge: "FREE Home Visit", order: 1 },
+        { title: "Diabetes Screening", desc: "HbA1c & Fasting blood sugar monitoring for accurate results.", price: "499", icon: "fa-droplet", bg: "#fff1f2", color: "#f43f5e", badge: "", order: 2 },
+        { title: "Thyroid Profile", desc: "T3, T4 & TSH analysis for hormonal balance tracking.", price: "599", icon: "fa-dna", bg: "#fff5f6", color: "var(--primary)", badge: "", order: 3 },
+        { title: "Fever Profile", desc: "Screening for Malaria, Dengue, and common infections.", price: "899", icon: "fa-virus-covid", bg: "#fefce8", color: "#eab308", badge: "", order: 4 }
+    ];
+
+    for (const item of defaults) {
+        await db.collection('cms_lab_offers').add(item);
+    }
+}
+
+window.showAddLabOfferModal = function () {
+    const html = `
+        <div class="profile-form">
+            <h3>Add New Lab Offer</h3>
+            <div class="input-group"><label>Test Title</label><input type="text" id="offer-title"></div>
+            <div class="input-group"><label>Description</label><textarea id="offer-desc"></textarea></div>
+            <div class="input-group"><label>Price (₹)</label><input type="number" id="offer-price"></div>
+            <div class="input-group"><label>FontAwesome Icon (e.g. fa-vial)</label><input type="text" id="offer-icon"></div>
+            <div class="input-group"><label>Badge Text (Optional)</label><input type="text" id="offer-badge" placeholder="e.g. FREE Home Visit"></div>
+            <button class="btn-signup" style="width:100%;" onclick="submitLabOffer()">Add to Homepage</button>
+        </div>
+    `;
+    DOM.modalBody.innerHTML = html;
+    DOM.modal.classList.remove('hidden');
+};
+
+window.submitLabOffer = async function () {
+    const offer = {
+        title: document.getElementById('offer-title').value,
+        desc: document.getElementById('offer-desc').value,
+        price: document.getElementById('offer-price').value,
+        icon: document.getElementById('offer-icon').value,
+        badge: document.getElementById('offer-badge').value,
+        bg: '#eef2ff',
+        color: 'var(--primary)',
+        order: AppState.cms_lab_offers.length + 1
+    };
+
+    try {
+        await db.collection('cms_lab_offers').add(offer);
+        showToast("Offer added to homepage!");
+        DOM.modal.classList.add('hidden');
+    } catch (err) {
+        showToast("Failed to add offer", "error");
+    }
+};
+
+window.deleteLabOffer = async function (id) {
+    if (!confirm("Remove this offer from homepage?")) return;
+    await db.collection('cms_lab_offers').doc(id).delete();
+    showToast("Offer removed");
+};
 
 // Start the app
 init();
