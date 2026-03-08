@@ -95,6 +95,9 @@
                 <i class="fas fa-headset"></i> <span>Help Desk</span>
             </a>
 
+            <a href="javascript:void(0)" class="menu-item" onclick="showPatientSection('reviews')">
+                <i class="fas fa-star"></i> <span>Patient Reviews</span>
+            </a>
             <div class="sidebar-divider"></div>
 
             <a href="javascript:void(0)" class="menu-item logout-item" onclick="handleLogout()">
@@ -121,6 +124,7 @@
                     <a href="javascript:void(0)" onclick="location.reload()" style="color:var(--primary);">Home</a>
                     <a href="javascript:void(0)" onclick="setCategory('doctors')">Doctors</a>
                     <a href="javascript:void(0)" onclick="setCategory('labs')">Lab Tests</a>
+                    <a href="javascript:void(0)" onclick="showPatientSection('reviews')">Reviews</a>
                     <a href="javascript:void(0)" onclick="showPatientSection('history')">Appointments</a>
                 </div>
                 <button class="theme-switch" id="theme-toggle" title="Toggle Dark Mode">
@@ -388,78 +392,6 @@
                     </div>
                 </section>
 
-                <!-- Patient Reviews Section -->
-                <section class="reviews container"
-                    style="margin: 100px auto; padding: 80px 0; background: var(--white); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm);">
-                    <div style="text-align: center; margin-bottom: 60px;">
-                        <h2 style="font-size: 2.5rem; font-weight: 800; color: #2C3E50; margin-bottom: 15px;">What Our
-                            Patients Say</h2>
-                        <p style="color: var(--text-muted); font-size: 1.2rem;">Real stories from real patients who
-                            found care on HealthMate.</p>
-                    </div>
-                    <div class="testimonials-grid"
-                        style="display:grid; grid-template-columns:repeat(3, 1fr); gap:30px; padding: 0 40px;">
-                        <div
-                            style="background: var(--bg-light); padding: 30px; border-radius: var(--radius-lg); border-left: 5px solid var(--primary);">
-                            <div style="display: flex; gap: 5px; color: #F1C40F; margin-bottom: 15px;">
-                                <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i
-                                    class="fas fa-star"></i><i class="fas fa-star"></i>
-                            </div>
-                            <p style="font-style: italic; color: #2C3E50; line-height: 1.7;">"I found the best
-                                cardiologist in Mumbai within minutes. The booking process was seamless and the doctor
-                                was very professional."</p>
-                            <div style="margin-top: 25px; display: flex; align-items: center; gap: 15px;">
-                                <div
-                                    style="width: 45px; height: 45px; border-radius: 50%; background: var(--secondary); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700;">
-                                    AM</div>
-                                <div>
-                                    <h5 style="margin:0; color: #2C3E50;">Aniket Mehta</h5>
-                                    <p style="margin:0; font-size: 0.8rem; color: var(--text-muted);">Cardiology Patient
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        <div
-                            style="background: var(--bg-light); padding: 30px; border-radius: var(--radius-lg); border-left: 5px solid var(--secondary);">
-                            <div style="display: flex; gap: 5px; color: #F1C40F; margin-bottom: 15px;">
-                                <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i
-                                    class="fas fa-star"></i><i class="fas fa-star"></i>
-                            </div>
-                            <p style="font-style: italic; color: #2C3E50; line-height: 1.7;">"Extremely helpful for
-                                finding diagnostic labs near my home. I got my reports on the same day as promised.
-                                Truly a game changer."</p>
-                            <div style="margin-top: 25px; display: flex; align-items: center; gap: 15px;">
-                                <div
-                                    style="width: 45px; height: 45px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700;">
-                                    RP</div>
-                                <div>
-                                    <h5 style="margin:0; color: #2C3E50;">Riya Patel</h5>
-                                    <p style="margin:0; font-size: 0.8rem; color: var(--text-muted);">Lab Test User</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div
-                            style="background: var(--bg-light); padding: 30px; border-radius: var(--radius-lg); border-left: 5px solid var(--accent);">
-                            <div style="display: flex; gap: 5px; color: #F1C40F; margin-bottom: 15px;">
-                                <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i
-                                    class="fas fa-star"></i><i class="fas fa-star"></i>
-                            </div>
-                            <p style="font-style: italic; color: #2C3E50; line-height: 1.7;">"Best experience for
-                                pediatric consultation. The doctor was very patient-friendly and the interface makes
-                                management easy."</p>
-                            <div style="margin-top: 25px; display: flex; align-items: center; gap: 15px;">
-                                <div
-                                    style="width: 45px; height: 45px; border-radius: 50%; background: #9B59B6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700;">
-                                    SN</div>
-                                <div>
-                                    <h5 style="margin:0; color: #2C3E50;">Suresh Nair</h5>
-                                    <p style="margin:0; font-size: 0.8rem; color: var(--text-muted);">Pediatrics Patient
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
 
                 <!-- Listing Display -->
                 <section class="listings container" id="list-section"
@@ -559,72 +491,6 @@
                 </section>
 
                 <!-- Testimonials -->
-                <section class="testimonials container"
-                    style="padding: 100px 0; background: #f8fafc; border-radius: 40px; margin-bottom: 80px;">
-                    <div style="text-align:center; max-width: 600px; margin: 0 auto 60px;">
-                        <h2 style="font-size:2.2rem; font-weight:900; margin-bottom:15px; color:#111;">What Our Patients
-                            Say</h2>
-                        <p style="color:var(--text-muted); font-size:1.1rem;">Thousands of users trust HealthMate for
-                            their medical needs every day.</p>
-                    </div>
-                    <div class="testimonials-grid"
-                        style="display:grid; grid-template-columns:repeat(3, 1fr); gap:30px;">
-                        <div class="testimonial-card"
-                            style="background:#fff; padding:40px; border-radius:24px; box-shadow:var(--shadow-md);">
-                            <div style="color:var(--primary); margin-bottom:20px; font-size:1.2rem;"><i
-                                    class="fas fa-quote-left"></i></div>
-                            <p
-                                style="color:#475569; font-style:italic; line-height:1.8; margin-bottom:30px; font-size:1rem;">
-                                "The easiest way to book a specialist. I found a highly rated cardiologist and had my
-                                consultation within an hour of booking."</p>
-                            <div style="display:flex; align-items:center; gap:15px;">
-                                <div
-                                    style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900;">
-                                    AS</div>
-                                <div>
-                                    <h4 style="margin:0; color:#1e293b;">Arjun Sharma</h4>
-                                    <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">Mumbai, MH</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="testimonial-card"
-                            style="background:#fff; padding:40px; border-radius:24px; box-shadow:var(--shadow-md);">
-                            <div style="color:var(--primary); margin-bottom:20px; font-size:1.2rem;"><i
-                                    class="fas fa-quote-left"></i></div>
-                            <p
-                                style="color:#475569; font-style:italic; line-height:1.8; margin-bottom:30px; font-size:1rem;">
-                                "Lab test at home was incredibly convenient. The technician was professional and I got
-                                my reports on the app very quickly."</p>
-                            <div style="display:flex; align-items:center; gap:15px;">
-                                <div
-                                    style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900;">
-                                    RK</div>
-                                <div>
-                                    <h4 style="margin:0; color:#1e293b;">Riya Kapoor</h4>
-                                    <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">Delhi, NCR</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="testimonial-card"
-                            style="background:#fff; padding:40px; border-radius:24px; box-shadow:var(--shadow-md);">
-                            <div style="color:var(--primary); margin-bottom:20px; font-size:1.2rem;"><i
-                                    class="fas fa-quote-left"></i></div>
-                            <p
-                                style="color:#475569; font-style:italic; line-height:1.8; margin-bottom:30px; font-size:1rem;">
-                                "Finally a healthcare app that works! Digital prescriptions, easy tracking, and great
-                                support. Highly recommended for every family."</p>
-                            <div style="display:flex; align-items:center; gap:15px;">
-                                <div
-                                    style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900;">
-                                    VS</div>
-                                <div>
-                                    <h4 style="margin:0; color:#1e293b;">Vikram Singh</h4>
-                                    <p style="margin:0; font-size:0.85rem; color:var(--text-muted);">Bangalore, KA</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
 
                 <!-- App Download -->
                 <section class="app-download container"
@@ -663,6 +529,130 @@
                         <i class="fas fa-mobile-screen"></i>
                     </div>
                 </section>
+            </div>
+
+            <!-- Tab: Patient Reviews -->
+            <div id="patient-reviews-tab" class="hidden container" style="padding: 100px 0;">
+                <div style="text-align: center; margin-bottom: 60px;">
+                    <h1 style="font-size: 3rem; font-weight: 900; color: #2C3E50; margin-bottom: 15px;">Patient Reviews
+                    </h1>
+                    <p style="color: var(--text-muted); font-size: 1.2rem;">Read verified experiences from our community
+                        of patients.</p>
+                </div>
+
+                <div class="testimonials-grid"
+                    style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:30px; margin-bottom: 60px;">
+                    <div
+                        style="background: var(--white); padding: 40px; border-radius: var(--radius-lg); border-left: 8px solid var(--primary); box-shadow: var(--shadow-md);">
+                        <div style="display: flex; gap: 5px; color: #F1C40F; margin-bottom: 20px;">
+                            <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i
+                                class="fas fa-star"></i><i class="fas fa-star"></i>
+                        </div>
+                        <p
+                            style="font-style: italic; color: #475569; line-height: 1.8; font-size: 1.1rem; margin-bottom: 30px;">
+                            "I found the best cardiologist in Mumbai within minutes. The booking process was seamless
+                            and the doctor was very professional."</p>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div
+                                style="width: 50px; height: 50px; border-radius: 50%; background: var(--secondary); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800;">
+                                AM</div>
+                            <div>
+                                <h4 style="margin:0; color: #2C3E50;">Aniket Mehta</h4>
+                                <p style="margin:0; font-size: 0.9rem; color: var(--text-muted);">Cardiology Patient</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="background: var(--white); padding: 40px; border-radius: var(--radius-lg); border-left: 8px solid var(--secondary); box-shadow: var(--shadow-md);">
+                        <div style="display: flex; gap: 5px; color: #F1C40F; margin-bottom: 20px;">
+                            <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i
+                                class="fas fa-star"></i><i class="fas fa-star"></i>
+                        </div>
+                        <p
+                            style="font-style: italic; color: #475569; line-height: 1.8; font-size: 1.1rem; margin-bottom: 30px;">
+                            "Extremely helpful for finding diagnostic labs near my home. I got my reports on the same
+                            day as promised. Truly a game changer."</p>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div
+                                style="width: 50px; height: 50px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800;">
+                                RP</div>
+                            <div>
+                                <h4 style="margin:0; color: #2C3E50;">Riya Patel</h4>
+                                <p style="margin:0; font-size: 0.9rem; color: var(--text-muted);">Lab Test User</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="background: var(--white); padding: 40px; border-radius: var(--radius-lg); border-left: 8px solid var(--accent); box-shadow: var(--shadow-md);">
+                        <div style="display: flex; gap: 5px; color: #F1C40F; margin-bottom: 20px;">
+                            <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i
+                                class="fas fa-star"></i><i class="fas fa-star"></i>
+                        </div>
+                        <p
+                            style="font-style: italic; color: #475569; line-height: 1.8; font-size: 1.1rem; margin-bottom: 30px;">
+                            "Best experience for pediatric consultation. The doctor was very patient-friendly and the
+                            interface makes management easy."</p>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div
+                                style="width: 50px; height: 50px; border-radius: 50%; background: #9B59B6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 800;">
+                                SN</div>
+                            <div>
+                                <h4 style="margin:0; color: #2C3E50;">Suresh Nair</h4>
+                                <p style="margin:0; font-size: 0.9rem; color: var(--text-muted);">Pediatrics Patient</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="background: var(--white); padding: 40px; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+                        <div style="color:var(--primary); margin-bottom:20px; font-size:1.5rem;"><i
+                                class="fas fa-quote-left"></i></div>
+                        <p
+                            style="color:#475569; font-style:italic; line-height:1.8; font-size: 1.1rem; margin-bottom:30px;">
+                            "The easiest way to book a specialist. I found a highly rated cardiologist and had my
+                            consultation within an hour of booking."</p>
+                        <div style="display:flex; align-items:center; gap:15px;">
+                            <div
+                                style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900;">
+                                AS</div>
+                            <div>
+                                <h4 style="margin:0; color:#2C3E50;">Arjun Sharma</h4>
+                                <p style="margin:0; font-size:0.9rem; color:var(--text-muted);">Mumbai, MH</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="background: var(--white); padding: 40px; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+                        <div style="color:var(--primary); margin-bottom:20px; font-size:1.5rem;"><i
+                                class="fas fa-quote-left"></i></div>
+                        <p
+                            style="color:#475569; font-style:italic; line-height:1.8; font-size: 1.1rem; margin-bottom:30px;">
+                            "Lab test at home was incredibly convenient. The technician was professional and I got my
+                            reports on the app very quickly."</p>
+                        <div style="display:flex; align-items:center; gap:15px;">
+                            <div
+                                style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900;">
+                                RK</div>
+                            <div>
+                                <h4 style="margin:0; color:#2C3E50;">Riya Kapoor</h4>
+                                <p style="margin:0; font-size:0.9rem; color:var(--text-muted);">Delhi, NCR</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    style="background: var(--bg-light); padding: 50px; border-radius: var(--radius-xl); text-align: center;">
+                    <h3 style="font-size: 1.8rem; font-weight: 800; color: #2C3E50; margin-bottom: 15px;">Have an
+                        experience to share?</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 30px;">Your feedback helps thousands of others
+                        find the right care.</p>
+                    <button class="btn-signup" style="padding: 15px 40px; font-size: 1.1rem;"
+                        onclick="showPatientSection('history')">Write a Review</button>
+                </div>
             </div>
 
             <!-- Tab: Booking History -->
