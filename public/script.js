@@ -1998,9 +1998,29 @@ window.openDetailsView = function (itemId, type) {
                     </div>
                 </div>
 
+                ${type === 'labs' && item.catalog && item.catalog.length > 0 ? `
+                <div style="margin-bottom:25px;">
+                    <h4 style="margin-bottom:15px;"><i class="fas fa-flask"></i> Laboratory Test Catalog</h4>
+                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:15px;">
+                        ${item.catalog.map(test => `
+                            <div style="background:white; border:1px solid #f0f0f0; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:0 2px 8px rgba(0,0,0,0.03);">
+                                ${test.image ?
+                `<img src="${test.image}" style="width:100%; height:80px; object-fit:cover; border-radius:8px; background:#f9f9f9;">` :
+                `<div style="width:100%; height:80px; background:#f5f5f5; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#ccc;"><i class="fas fa-image fa-2x"></i></div>`
+            }
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <h5 style="font-size:0.85rem; margin:0; color:var(--text-main);">${test.name}</h5>
+                                    <span style="font-weight:700; color:var(--primary); font-size:0.85rem;">₹${test.price}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+
                 <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #eee; padding-top:20px;">
                     <div>
-                        <p style="font-size:0.75rem; color:var(--text-muted);">${type === 'doctors' ? 'Consultation' : 'Test'} Fee</p>
+                        <p style="font-size:0.75rem; color:var(--text-muted);">${type === 'doctors' ? 'Consultation' : 'Test'} Fee Start</p>
                         <h3 style="color:var(--primary);">₹${item.price || 500}</h3>
                     </div>
                     <button class="btn-signup" style="padding:12px 30px;" onclick="openBooking('${item.id}')">Book Now</button>
@@ -2615,13 +2635,14 @@ function renderAdminDashboard() {
                 const userObj = AppState.users.find(u => u.id === p.id);
                 return `
                 <div class="tile-item">
+                    <img src="${p.image || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'}" style="width:45px; height:45px; border-radius:10px; object-fit:cover; background:#f9f9f9;">
                     <div class="tile-info">
                         <h4>${p.name}</h4>
                         <p>${p.specialty || 'Provider'} • ${userObj?.email || 'No email'}</p>
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <button class="btn-book" style="background:#3498db;" onclick="viewProviderDetails('${p.id}', '${p.collection}')"><i class="fas fa-eye"></i> View Full Profile</button>
-                        <button class="btn-book" onclick="approveProvider('${p.id}', '${p.collection}')">Quick Approve</button>
+                        <button class="btn-book" style="background:#3498db; padding:8px 15px;" onclick="viewProviderDetails('${p.id}', '${p.collection}')"><i class="fas fa-eye"></i> View</button>
+                        <button class="btn-book" style="padding:8px 15px;" onclick="approveProvider('${p.id}', '${p.collection}')">Approve</button>
                     </div>
                 </div>
             `}).join('');
@@ -2875,16 +2896,31 @@ window.viewProviderDetails = function (id, collection) {
             </div>
 
             <div class="detail-group" style="grid-column: 1/-1;">
-                <h4><i class="fas fa-file-shield"></i> Verified Documents</h4>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <h4><i class="fas fa-file-shield"></i> Verified Documents & Portfolio</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
                     ${Object.entries(p.docs || {}).map(([key, url]) => `
                         <div class="doc-preview-item">
                             <i class="fas fa-file-pdf"></i>
                             <span style="flex:1;">${key.toUpperCase()}</span>
                             <a href="${url}" target="_blank" style="color:var(--primary); font-size:0.8rem;">Preview</a>
                         </div>
-                    `).join('') || '<p>No documents uploaded.</p>'}
+                    `).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">No documents uploaded.</p>'}
                 </div>
+                
+                ${p.catalog && p.catalog.length > 0 ? `
+                <h5 style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">Laboratory Test Catalog Images:</h5>
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px;">
+                    ${p.catalog.map(test => `
+                        <div style="border:1px solid #eee; border-radius:8px; padding:5px; text-align:center;">
+                            ${test.image ?
+            `<img src="${test.image}" style="width:100%; height:50px; object-fit:cover; border-radius:4px; cursor:pointer;" onclick="window.open('${test.image}', '_blank')">` :
+            `<div style="height:50px; background:#f9f9f9; display:flex; align-items:center; justify-content:center; color:#ccc;"><i class="fas fa-image"></i></div>`
+        }
+                            <p style="font-size:0.6rem; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${test.name}</p>
+                        </div>
+                    `).join('')}
+                </div>
+                ` : ''}
             </div>
 
             <div class="detail-group" style="grid-column: 1/-1; background:#fff8f8; padding:15px; border-radius:12px;">

@@ -675,49 +675,24 @@
                     <div id="lab-catalog-tab" class="doctor-tab hidden">
                         <div class="profile-form"
                             style="background:#f8f8f8; padding:25px; border-radius:15px; margin-bottom:30px; border: 1px dashed #ddd;">
-                            <h4 style="margin-bottom:15px;"><i class="fas fa-plus-circle"></i> Add New Diagnostic Test
+                            <h4 style="margin-bottom:20px;"><i class="fas fa-plus-circle"></i> Add New Diagnostic Test
                             </h4>
-                            <div class="input-group"><input type="text" id="new-test-name"
-                                    placeholder="Test Name (e.g. Blood Sugar)"></div>
-                            <div class="input-group"><input type="number" id="new-test-price"
-                                    placeholder="Test Price (₹)"></div>
                             <div class="input-group">
-                                <div id="booking-custom-fields" style="margin-top:20px;">
-                                    <label style="font-weight: 700; display: block; margin-bottom: 10px;">3. Additional
-                                        Details</label>
-                                    <textarea id="booking-symptoms" placeholder="Describe your symptoms (optional)"
-                                        style="width:100%; padding:15px; border-radius:10px; border:1px solid #ddd; margin-bottom:15px;"></textarea>
-
-                                    <div id="lab-collection-options" class="hidden" style="margin-bottom:20px;">
-                                        <label style="font-weight: 700; display: block; margin-bottom: 10px;">Collection
-                                            Preference</label>
-                                        <div style="display:flex; gap:10px;">
-                                            <button class="filter-btn active" onclick="setCollectionType('visit')"><i
-                                                    class="fas fa-hospital"></i> Visit Lab</button>
-                                            <button class="filter-btn" onclick="setCollectionType('home')"><i
-                                                    class="fas fa-house-user"></i> Home Pickup (+₹99)</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="upload-box"
-                                        onclick="document.getElementById('booking-report-input').click()"
-                                        style="border: 2px dashed #ddd; padding: 20px; text-align: center; border-radius: 15px; cursor: pointer;">
-                                        <i class="fas fa-cloud-upload-alt"
-                                            style="font-size: 2rem; color: var(--primary); margin-bottom: 10px;"></i>
-                                        <p style="font-size: 0.9rem; color: var(--text-muted);">Upload Previous Reports
-                                            (PDF/Image)</p>
-                                        <input type="file" id="booking-report-input" class="hidden"
-                                            onchange="handleBookingReport(event)">
-                                        <div id="booking-report-preview"
-                                            style="margin-top:10px; font-size:0.8rem; color:var(--primary);"></div>
-                                    </div>
-                                </div>
-
-                                <label style="font-weight: 700; display: block; margin: 25px 0 10px;">4. Payment Method
-                                    (Test Mode)</label>
-                                <input type="file" id="new-test-image" accept="image/*" style="font-size:0.8rem;">
+                                <label>Test Name</label>
+                                <input type="text" id="new-test-name" placeholder="e.g. Complete Blood Count (CBC)">
                             </div>
-                            <button class="btn-signup" onclick="addLabTest()" style="width:100%;">Add Test to
+                            <div class="input-group">
+                                <label>Test Price (₹)</label>
+                                <input type="number" id="new-test-price" placeholder="e.g. 500">
+                            </div>
+                            <div class="input-group">
+                                <label>Test Reference Image / Illustration</label>
+                                <input type="file" id="new-test-image" accept="image/*" style="font-size:0.8rem;">
+                                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Add an image to
+                                    help patients understand the test.</p>
+                            </div>
+                            <button class="btn-signup" onclick="addLabTest()" style="width:100%; margin-top:10px;">Add
+                                Test to
                                 Catalog</button>
                         </div>
                         <div class="tile-list" id="lab-catalog-list"></div>
