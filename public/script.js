@@ -1380,32 +1380,38 @@ window.submitReview = async function (appId) {
 };
 
 // --- Role Specific Functions ---
-window.showPatientSection = function (tab) {
+window.showPatientSection = function (tab, event) {
+    if (event) event.stopPropagation();
+
+    // Haptic Feedback Simulation
+    if (window.navigator && window.navigator.vibrate) {
+        window.navigator.vibrate(5);
+    }
+
     // Hide all patient tabs
-    document.getElementById('patient-home-tab').classList.add('hidden');
-    document.getElementById('patient-history-tab').classList.add('hidden');
-    document.getElementById('patient-reports-tab').classList.add('hidden');
-    document.getElementById('patient-records-tab').classList.add('hidden');
-    document.getElementById('patient-profile-tab').classList.add('hidden');
+    document.querySelectorAll('.patient-tab').forEach(t => t.classList.add('hidden'));
 
-    // Show selected
-    const target = document.getElementById(`patient-${tab}-tab`);
-    if (target) target.classList.remove('hidden');
-
-    // Highlight Navigation (Desktop)
-    document.querySelectorAll('.patient-nav a').forEach(a => {
-        a.style.color = 'var(--text-muted)';
-        if (a.innerText.toLowerCase().includes(tab)) a.style.color = 'var(--primary)';
-    });
+    const targetTab = document.getElementById(`patient-${tab}-tab`);
+    if (targetTab) {
+        targetTab.classList.remove('hidden');
+        requestAnimationFrame(() => targetTab.style.opacity = '1');
+    }
 
     // Highlight Navigation (Mobile Bottom Nav)
     document.querySelectorAll('.mobile-bottom-nav .nav-item').forEach(item => {
         item.classList.remove('active');
         const span = item.querySelector('span').innerText.toLowerCase();
-        if (span.includes(tab) || (tab === 'history' && span.includes('bookings'))) {
+        // Match span text with tab name
+        if (span.includes(tab) || (tab === 'history' && span.includes('bookings')) || (tab === 'records' && span.includes('records'))) {
             item.classList.add('active');
         }
     });
+
+    // Special logic for profile section
+    if (tab === 'profile') {
+        const desktopProfile = document.getElementById('patient-profile-tab');
+        if (desktopProfile) desktopProfile.classList.remove('hidden');
+    }
 
     if (tab === 'home') updatePatientDashboard();
     if (tab === 'history') refreshPatientHistory();
