@@ -3756,30 +3756,50 @@ window.viewReport = function (appId) {
     showToast("Viewing report for booking: " + appId, "info");
 };
 
-// --- Auth Simulations ---
-window.handleGoogleLogin = function () {
-    showToast("Opening Google Sign-In...", "info");
-    setTimeout(() => {
-        showToast("Access Granted. Welcome back, Patient!", "success");
-        // Simulated Login as Patient
-        AppState.user = { id: 'test_google_1', name: 'Ayush Sharma', email: 'ayush@example.com', role: 'patient', image: 'A' };
-        applyUserSession();
+// --- Real Auth Implementation (Replacing Simulations) ---
+window.handleGoogleLogin = async function () {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+        showToast("Opening Google Sign-In...", "info");
+        await auth.signInWithPopup(provider);
         DOM.authOverlay.classList.add('hidden');
-    }, 1500);
+    } catch (err) {
+        console.error("Google Auth Error:", err);
+        showToast(err.message, "error");
+    }
 };
 
-window.simulateOTP = function () {
-    const phone = prompt("Enter mobile number:");
+window.simulateOTP = async function () {
+    const phone = prompt("Enter mobile number with country code (e.g. +919998887776):");
     if (!phone) return;
-    showToast("OTP sent to " + phone);
-    const otp = prompt("Enter 4-digit OTP (Try 1234):");
-    if (otp === "1234") {
-        showToast("Login Successful!", "success");
-        AppState.user = { id: 'test_otp_2', name: 'Guest Patient', email: 'guest@example.com', role: 'patient', phone: phone };
-        applyUserSession();
+
+    try {
+        // Initialize reCAPTCHA if not already
+        if (!window.recaptchaVerifier) {
+            window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+                'size': 'invisible'
+            });
+        }
+
+        showToast("Sending OTP to " + phone);
+        const confirmationResult = await auth.signInWithPhoneNumber(phone, window.recaptchaVerifier);
+
+        const code = prompt("Enter the 6-digit OTP sent to your phone:");
+        if (!code) return;
+
+        showToast("Verifying OTP...");
+        await confirmationResult.confirm(code);
+        showToast("Phone Login Successful!", "success");
         DOM.authOverlay.classList.add('hidden');
-    } else {
-        showToast("Invalid OTP", "error");
+    } catch (err) {
+        console.error("Phone Auth Error:", err);
+        showToast(err.message, "error");
+        // Reset recaptcha on error so it can be retried
+        if (window.recaptchaVerifier) {
+            window.recaptchaVerifier.render().then(widgetId => {
+                grecaptcha.reset(widgetId);
+            });
+        }
     }
 };
 
