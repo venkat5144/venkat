@@ -1,30 +1,30 @@
 :root {
-    /* Core Theme - Zomato Red */
-    --primary: #E23744;
-    --primary-hover: #CB202D;
-    --primary-light: #FFF5F6;
-    --secondary: #2D2D2D;
-    --secondary-hover: #1C1C1C;
-    --secondary-light: #F8F8F8;
+    /* Core Theme - Medical Modern */
+    --primary: #2ECC71;
+    --primary-hover: #27AE60;
+    --primary-light: #EBFAF0;
+    --secondary: #3498DB;
+    --secondary-hover: #2980B9;
+    --secondary-light: #EBF5FB;
     --accent: #FF9800;
 
-    --text-main: #1A1C1E;
-    --text-muted: #6B7280;
-    --bg-light: #F8FAFC;
+    --text-main: #2C3E50;
+    --text-muted: #7F8C8D;
+    --bg-light: #F7F9FC;
     --white: #FFFFFF;
-    --border: #E2E8F0;
+    --border: #E8EDF2;
 
     /* Shadows & Radii */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
-    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.06), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
     --radius-md: 12px;
     --radius-lg: 16px;
     --radius-xl: 24px;
 
-    --glass-bg: rgba(255, 255, 255, 0.9);
-    --glass-border: rgba(255, 255, 255, 0.4);
-    --glass-shadow: 0 8px 32px 0 rgba(226, 55, 68, 0.05);
+    --glass-bg: rgba(255, 255, 255, 0.95);
+    --glass-border: rgba(255, 255, 255, 0.6);
+    --glass-shadow: 0 8px 32px 0 rgba(46, 204, 113, 0.08);
 }
 
 /* Custom Scrollbar for Premium Feel */
@@ -2158,13 +2158,20 @@ a {
 
 /* Cards & Interactions */
 .doctor-card {
-    transition: all 0.3s ease;
-    border: 1px solid #f0f0f0;
+    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     overflow: hidden;
+    background: var(--white);
+    padding: 25px;
+    position: relative;
+    box-shadow: var(--shadow-sm);
 }
 
-.doctor-card:active {
-    transform: scale(0.97);
+.doctor-card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--secondary-light);
 }
 
 .category-card {

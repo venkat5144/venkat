@@ -849,37 +849,43 @@ function renderGrid() {
 
         return `
         <div class="doctor-card" onclick="openDetailsView('${item.id}', '${AppState.currentType}')">
-            ${item.isPremium ? '<div style="position:absolute; top:0; right:0; background:var(--accent); color:white; padding:4px 12px; font-size:0.65rem; font-weight:800; border-radius:0 0 0 12px; z-index:1;">SPONSORED</div>' : ''}
-            <div style="display:flex; gap:20px;">
-                <div class="card-photo-wrapper" style="position:relative;">
-                    <div style="width:100px; height:100px; border-radius:18px; overflow:hidden; border:2px solid #fff; box-shadow:0 10px 25px rgba(0,0,0,0.06);">
+            ${item.isPremium ? '<div style="position:absolute; top:0; right:0; background:var(--accent); color:white; padding:6px 15px; font-size:0.7rem; font-weight:800; border-radius:0 0 0 16px; z-index:1; letter-spacing:1px;">TOP RATED</div>' : ''}
+            
+            <div style="display:flex; gap:25px; align-items: flex-start;">
+                <div class="card-photo-wrapper">
+                    <div style="width:110px; height:110px; border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-md); border:3px solid #fff;">
                         <img src="${item.image || fallbackImg}" style="width:100%; height:100%; object-fit:cover;">
                     </div>
                 </div>
                 <div style="flex:1;">
-                    <div style="display:flex; justify-content:space-between; align-items:start;">
-                        <h3 class="card-title" style="color:var(--primary); font-size:1.4rem;">${item.name}</h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="color:var(--text-main); font-size:1.5rem; font-weight:800; margin:0;">${item.name}</h3>
+                        <div style="background:var(--primary-light); color:var(--primary); padding:4px 10px; border-radius:8px; font-size:0.75rem; font-weight:800;">
+                            <i class="fas fa-check-circle"></i> VERIFIED
+                        </div>
                     </div>
-                    <p style="color:var(--text-muted); font-size:0.95rem; font-weight:500; margin:4px 0;">${item.specialty || 'General Physician'}</p>
-                    <p style="font-size:0.85rem; color:#666;"><i class="fas fa-medal" style="color:var(--accent);"></i> ${exp} years experience overall</p>
-                    <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                        <span class="availability-badge"><i class="fas fa-clock"></i> Next: ${nextSlot}</span>
+                    <p style="color:var(--secondary); font-size:1rem; font-weight:700; margin:5px 0;">${item.specialty || 'Medical Specialist'}</p>
+                    <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
+                        <div style="display:flex; color:#F1C40F; font-size:0.9rem; gap:2px;">
+                            ${Array(5).fill(0).map((_, i) => `<i class="${i < Math.floor(rating) ? 'fas' : 'far'} fa-star"></i>`).join('')}
+                        </div>
+                        <span style="color:var(--text-muted); font-size:0.85rem; font-weight:600;">${rating} (${reviews} reviews)</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px; border-top:1px solid var(--border); padding-top:15px;">
+                        <div style="font-size:0.85rem; color:#666;"><i class="fas fa-briefcase" style="color:var(--secondary);"></i> <strong>${exp}+ Years</strong> Exp</div>
+                        <div style="font-size:0.85rem; color:#666;"><i class="fas fa-map-marker-alt" style="color:var(--primary);"></i> Mumbai, MH</div>
                     </div>
                 </div>
             </div>
-            
-            <div style="display:flex; align-items:center; gap:15px; padding-top:15px; border-top:1px solid var(--border); margin-top:5px;">
-                <div style="flex:1;">
-                    <div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">
-                        <span style="background:var(--secondary); color:white; padding:2px 6px; border-radius:4px; font-size:0.8rem; font-weight:700;">${rating} <i class="fas fa-star" style="font-size:0.7rem;"></i></span>
-                        <span style="font-size:0.8rem; color:var(--text-muted); text-decoration:underline;">${reviews} Patient Stories</span>
-                    </div>
-                    <p style="font-size:0.8rem; color:#666;"><i class="fas fa-location-dot"></i> ${item.address || 'Mumbai, MH'}</p>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:25px; padding:15px; background:var(--bg-light); border-radius:12px;">
+                <div>
+                     <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:2px; font-weight:600; text-transform:uppercase;">Next Available Slot</p>
+                    <p style="font-size:0.9rem; color:var(--primary); font-weight:800; margin:0;"><i class="fas fa-calendar-alt"></i> Today, ${nextSlot}</p>
                 </div>
-                <div style="text-align:right;">
-                    <p style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Book for ₹${item.price || 500}</p>
-                    <button class="btn-signup" style="padding:10px 25px;" onclick="event.stopPropagation(); openBooking('${item.id}')">Book Now</button>
-                </div>
+                <button class="btn-signup" style="background:var(--secondary); padding:12px 30px; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);" onclick="event.stopPropagation(); openBooking('${item.id}')">
+                    Book Appointment
+                </button>
             </div>
         </div>
         `;
@@ -3128,10 +3134,10 @@ function renderUserListHTML(users) {
         const userRole = (u.role || "patient").toLowerCase();
         const initial = userName.charAt(0).toUpperCase() || "?";
 
-        let roleColor = '#2ecc71'; // patient green
-        if (userRole === 'doctor') roleColor = '#e23744'; // doc red
-        if (userRole === 'lab') roleColor = 'var(--primary)'; // lab blue
-        if (userRole === 'admin') roleColor = '#9b59b6'; // admin purple
+        let roleColor = 'var(--primary)'; // patient green
+        if (AppState.user.role === 'doctor') roleColor = 'var(--secondary)'; // doc blue
+        if (AppState.user.role === 'lab') roleColor = 'var(--primary)';
+        if (AppState.user.role === 'admin') roleColor = '#9B59B6'; // admin purple
 
         return `
             <div class="tile-item" style="padding:15px; margin-bottom:12px; border: 1px solid #f5f5f5; border-radius:15px;">
