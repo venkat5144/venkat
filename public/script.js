@@ -514,21 +514,27 @@ window.renderOnboardingStep = function () {
 
     let html = '';
     if (step === 1) {
+        const isLab = role === 'lab';
         html = `
-            <h2>1. Basic Information</h2>
+            <h2>1. ${isLab ? 'Lab & Owner' : 'Basic'} Information</h2>
             <p>Tell us more about yourself to establish your account.</p>
             <div style="display:flex; align-items:center; gap:20px; margin-bottom:20px;">
                 <div id="onboarding-photo-preview" class="profile-img-large" style="margin:0; width:120px; height:120px;">
                     ${AppState.onboardingData.image ? `<img src="${AppState.onboardingData.image}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : '<i class="fas fa-camera"></i>'}
                 </div>
                 <div>
-                    <label>Profile Photo</label><br>
+                    <label>${isLab ? 'Lab Logo / Photo' : 'Profile Photo'}</label><br>
                     <input type="file" id="onboarding-img-input" accept="image/*" onchange="previewOnboardingPhoto(this)">
                 </div>
             </div>
-            <div class="input-group"><label>Full Name</label><input type="text" id="ob-name" value="${AppState.onboardingData.name || AppState.user.name}"></div>
+            ${isLab ? `<div class="input-group"><label>Lab Name</label><input type="text" id="ob-lab-name" value="${AppState.onboardingData.labName || ''}"></div>` : ''}
+            <div class="input-group"><label>${isLab ? 'Owner / Manager Name' : 'Full Name'}</label><input type="text" id="ob-name" value="${AppState.onboardingData.name || AppState.user.name}"></div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                <div class="input-group"><label>Gender</label><select id="ob-gender"><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select></div>
+                <div class="input-group"><label>Contact Phone</label><input type="text" id="ob-phone" value="${AppState.onboardingData.phone || AppState.user.phone || ''}"></div>
+                <div class="input-group"><label>Email Address</label><input type="email" id="ob-email" value="${AppState.onboardingData.email || AppState.user.email || ''}"></div>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div class="input-group"><label>Gender</label><select id="ob-gender"><option value="Male" ${AppState.onboardingData.gender === 'Male' ? 'selected' : ''}>Male</option><option value="Female" ${AppState.onboardingData.gender === 'Female' ? 'selected' : ''}>Female</option><option value="Other" ${AppState.onboardingData.gender === 'Other' ? 'selected' : ''}>Other</option></select></div>
                 <div class="input-group"><label>Date of Birth</label><input type="date" id="ob-dob" value="${AppState.onboardingData.dob || ''}"></div>
             </div>
             <div class="input-group"><label>Residential Address</label><textarea id="ob-res-address">${AppState.onboardingData.resAddress || ''}</textarea></div>
@@ -548,11 +554,21 @@ window.renderOnboardingStep = function () {
             `;
         } else {
             html = `
-                <h2>2. Lab Services & Info</h2>
-                <div class="input-group"><label>Lab Registration Number</label><input type="text" id="ob-lab-reg" value="${AppState.onboardingData.labRegNum || ''}"></div>
-                <div class="input-group"><label>GST Number (Optional)</label><input type="text" id="ob-gst" value="${AppState.onboardingData.gst || ''}"></div>
-                <div class="input-group"><label>Test Categories (e.g. Blood, X-Ray)</label><input type="text" id="ob-categories" value="${AppState.onboardingData.categories || ''}"></div>
-                <div class="input-group"><label>NABL Accredited?</label><select id="ob-nabl"><option value="Yes">Yes</option><option value="No">No</option></select></div>
+                <h2>2. Lab Technical Details</h2>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                   <div class="input-group"><label>Lab Technician Name</label><input type="text" id="ob-tech-name" value="${AppState.onboardingData.techName || ''}"></div>
+                   <div class="input-group"><label>Technician Qualification</label><input type="text" id="ob-tech-qual" value="${AppState.onboardingData.techQual || ''}"></div>
+                </div>
+                <div class="input-group"><label>Tests Available (Comma separated)</label><input type="text" id="ob-categories" placeholder="Blood test, Thyroid, COVID-19" value="${AppState.onboardingData.categories || ''}"></div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                   <div class="input-group"><label>Home Sample Collection?</label><select id="ob-home-col"><option value="Yes" ${AppState.onboardingData.homeCollection === 'Yes' ? 'selected' : ''}>Yes</option><option value="No" ${AppState.onboardingData.homeCollection === 'No' ? 'selected' : ''}>No</option></select></div>
+                   <div class="input-group"><label>Report Delivery Time</label><input type="text" id="ob-delivery" placeholder="e.g. 24 Hours, Same Day" value="${AppState.onboardingData.deliveryTime || ''}"></div>
+                </div>
+                <div class="input-group"><label>Profile Description</label><textarea id="ob-desc" placeholder="Briefly describe your lab's mission and USP">${AppState.onboardingData.description || ''}</textarea></div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                    <div class="input-group"><label>GST Number (Optional)</label><input type="text" id="ob-gst" value="${AppState.onboardingData.gst || ''}"></div>
+                    <div class="input-group"><label>NABL Accredited?</label><select id="ob-nabl"><option value="Yes" ${AppState.onboardingData.nabl === 'Yes' ? 'selected' : ''}>Yes</option><option value="No" ${AppState.onboardingData.nabl === 'No' ? 'selected' : ''}>No</option></select></div>
+                </div>
             `;
         }
     } else if (step === 3) {
@@ -560,37 +576,87 @@ window.renderOnboardingStep = function () {
             <h2>3. ${role === 'doctor' ? 'Clinic' : 'Lab'} Location & Details</h2>
             <div class="input-group"><label>${role === 'doctor' ? 'Clinic/Hospital' : 'Center'} Name</label><input type="text" id="ob-clinic-name" value="${AppState.onboardingData.clinicName || ''}"></div>
             <div class="input-group"><label>Full Address</label><textarea id="ob-clinic-address">${AppState.onboardingData.clinicAddress || ''}</textarea></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div class="input-group"><label>City / Location</label><input type="text" id="ob-city" value="${AppState.onboardingData.city || ''}"></div>
+                <div class="input-group"><label>Working Hours</label><input type="text" id="ob-hours" placeholder="e.g. 9 AM - 9 PM" value="${AppState.onboardingData.workingHours || ''}"></div>
+            </div>
             <div class="map-placeholder" id="onboarding-map-marker">
                 <i class="fas fa-location-dot"></i> GPS Location Detected (19.0760° N, 72.8777° E)
             </div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                <div class="input-group"><label>Consultation Fee (Offline)</label><input type="number" id="ob-fee-off" value="${AppState.onboardingData.price || '500'}"></div>
-                <div class="input-group"><label>Emergency Available?</label><select id="ob-emergency"><option value="Yes">Yes</option><option value="No">No</option></select></div>
+                <div class="input-group"><label>Avg. Consultation/Test Fee</label><input type="number" id="ob-fee-off" value="${AppState.onboardingData.price || '500'}"></div>
+                <div class="input-group"><label>Emergency Available?</label><select id="ob-emergency"><option value="Yes" ${AppState.onboardingData.emergency === 'Yes' ? 'selected' : ''}>Yes</option><option value="No" ${AppState.onboardingData.emergency === 'No' ? 'selected' : ''}>No</option></select></div>
             </div>
         `;
     } else if (step === 4) {
+        const isLab = role === 'lab';
         html = `
-            <h2>4. Document Upload</h2>
-            <p>Upload clear scans for verification.</p>
-            <div class="upload-grid">
-                <div class="upload-card" onclick="document.getElementById('doc-id-proof').click()">
-                    <input type="file" id="doc-id-proof" class="hidden" onchange="handleDocUpload(this, 'idProof')">
+            <h2>4. Verification Documents & Photos</h2>
+            <p>Upload clear scans and real photos for verification.</p>
+            <div class="upload-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="upload-card" onclick="document.getElementById('doc-id-owner').click()">
+                    <input type="file" id="doc-id-owner" class="hidden" onchange="handleDocUpload(this, 'ownerIdProof')">
                     <i class="fas fa-id-card"></i>
-                    <h4>ID Proof</h4>
-                    <div class="upload-preview" id="preview-idProof">${AppState.onboardingData.docs?.idProof ? '✓ Uploaded' : 'Aadhaar / Govt ID'}</div>
+                    <h4>ID Proof (Owner)</h4>
+                    <div class="upload-preview" id="preview-ownerIdProof">${AppState.onboardingData.docs?.ownerIdProof ? '✓ Uploaded' : 'Aadhaar/PAN'}</div>
                 </div>
                 <div class="upload-card" onclick="document.getElementById('doc-reg-cert').click()">
                     <input type="file" id="doc-reg-cert" class="hidden" onchange="handleDocUpload(this, 'regCert')">
                     <i class="fas fa-certificate"></i>
-                    <h4>Registration</h4>
-                    <div class="upload-preview" id="preview-regCert">${AppState.onboardingData.docs?.regCert ? '✓ Uploaded' : 'Medical/Lab Certificate'}</div>
+                    <h4>${isLab ? 'Lab Reg. Cert' : 'Medical Reg.'}</h4>
+                    <div class="upload-preview" id="preview-regCert">${AppState.onboardingData.docs?.regCert ? '✓ Uploaded' : 'Certificate'}</div>
                 </div>
+                <div class="upload-card" onclick="document.getElementById('doc-trade').click()">
+                    <input type="file" id="doc-trade" class="hidden" onchange="handleDocUpload(this, 'tradeLicense')">
+                    <i class="fas fa-file-invoice"></i>
+                    <h4>Trade License</h4>
+                    <div class="upload-preview" id="preview-tradeLicense">${AppState.onboardingData.docs?.tradeLicense ? '✓ Uploaded' : 'License Copy'}</div>
+                </div>
+                ${isLab ? `
+                <div class="upload-card" onclick="document.getElementById('doc-nabl').click()">
+                    <input type="file" id="doc-nabl" class="hidden" onchange="handleDocUpload(this, 'nablCert')">
+                    <i class="fas fa-award"></i>
+                    <h4>NABL Cert</h4>
+                    <div class="upload-preview" id="preview-nablCert">${AppState.onboardingData.docs?.nablCert ? '✓ Uploaded' : 'Accreditation'}</div>
+                </div>
+                <div class="upload-card" onclick="document.getElementById('doc-tech-cert').click()">
+                    <input type="file" id="doc-tech-cert" class="hidden" onchange="handleDocUpload(this, 'techCert')">
+                    <i class="fas fa-user-graduate"></i>
+                    <h4>Tech Cert</h4>
+                    <div class="upload-preview" id="preview-techCert">${AppState.onboardingData.docs?.techCert ? '✓ Uploaded' : 'Qualification'}</div>
+                </div>
+                <div class="upload-card" onclick="document.getElementById('doc-pan').click()">
+                    <input type="file" id="doc-pan" class="hidden" onchange="handleDocUpload(this, 'panCard')">
+                    <i class="fas fa-address-card"></i>
+                    <h4>PAN Card</h4>
+                    <div class="upload-preview" id="preview-panCard">${AppState.onboardingData.docs?.panCard ? '✓ Uploaded' : 'Lab/Owner PAN'}</div>
+                </div>
+                <div class="upload-card" onclick="document.getElementById('doc-lab-photo').click()">
+                    <input type="file" id="doc-lab-photo" class="hidden" onchange="handleDocUpload(this, 'labPhoto')">
+                    <i class="fas fa-image"></i>
+                    <h4>Lab Photo</h4>
+                    <div class="upload-preview" id="preview-labPhoto">${AppState.onboardingData.docs?.labPhoto ? '✓ Uploaded' : 'Interior/Entry'}</div>
+                </div>
+                <div class="upload-card" onclick="document.getElementById('doc-equip-photo').click()">
+                    <input type="file" id="doc-equip-photo" class="hidden" onchange="handleDocUpload(this, 'equipPhoto')">
+                    <i class="fas fa-microscope"></i>
+                    <h4>Equipment</h4>
+                    <div class="upload-preview" id="preview-equipPhoto">${AppState.onboardingData.docs?.equipPhoto ? '✓ Uploaded' : 'Testing Gear'}</div>
+                </div>
+                <div class="upload-card" onclick="document.getElementById('doc-recep-photo').click()">
+                    <input type="file" id="doc-recep-photo" class="hidden" onchange="handleDocUpload(this, 'recepPhoto')">
+                    <i class="fas fa-desk"></i>
+                    <h4>Reception</h4>
+                    <div class="upload-preview" id="preview-recepPhoto">${AppState.onboardingData.docs?.recepPhoto ? '✓ Uploaded' : 'Front Desk'}</div>
+                </div>
+                ` : `
                 <div class="upload-card" onclick="document.getElementById('doc-extra').click()">
                     <input type="file" id="doc-extra" class="hidden" onchange="handleDocUpload(this, 'extraDoc')">
                     <i class="fas fa-file-contract"></i>
                     <h4>Other Docs</h4>
                     <div class="upload-preview" id="preview-extraDoc">${AppState.onboardingData.docs?.extraDoc ? '✓ Uploaded' : 'Degree / License'}</div>
                 </div>
+                `}
             </div>
         `;
     } else if (step === 5) {
@@ -617,7 +683,7 @@ window.renderOnboardingStep = function () {
                 </div>
                 <div class="input-group">
                     <label>Digital Signature (Type your full name)</label>
-                    <input type="text" id="ob-sig" placeholder="Dr. John Doe">
+                    <input type="text" id="ob-sig" placeholder="Your Full Name">
                 </div>
             </div>
         `;
@@ -671,14 +737,18 @@ window.prevOnboardingStep = function () {
 function saveCurrentStepData() {
     const s = AppState.currentOnboardingStep;
     const d = AppState.onboardingData;
+    const isLab = AppState.user.role === 'lab';
 
     if (s === 1) {
+        if (isLab) d.labName = document.getElementById('ob-lab-name').value;
         d.name = document.getElementById('ob-name').value;
+        d.phone = document.getElementById('ob-phone').value;
+        d.email = document.getElementById('ob-email').value;
         d.gender = document.getElementById('ob-gender').value;
         d.dob = document.getElementById('ob-dob').value;
         d.resAddress = document.getElementById('ob-res-address').value;
     } else if (s === 2) {
-        if (AppState.user.role === 'doctor') {
+        if (!isLab) {
             d.regNum = document.getElementById('ob-reg-num').value;
             d.council = document.getElementById('ob-council').value;
             d.qualification = document.getElementById('ob-qual').value;
@@ -686,14 +756,20 @@ function saveCurrentStepData() {
             d.experience = document.getElementById('ob-exp').value;
             d.university = document.getElementById('ob-uni').value;
         } else {
-            d.labRegNum = document.getElementById('ob-lab-reg').value;
-            d.gst = document.getElementById('ob-gst').value;
+            d.techName = document.getElementById('ob-tech-name').value;
+            d.techQual = document.getElementById('ob-tech-qual').value;
             d.categories = document.getElementById('ob-categories').value;
+            d.homeCollection = document.getElementById('ob-home-col').value;
+            d.deliveryTime = document.getElementById('ob-delivery').value;
+            d.description = document.getElementById('ob-desc').value;
+            d.gst = document.getElementById('ob-gst').value;
             d.nabl = document.getElementById('ob-nabl').value;
         }
     } else if (s === 3) {
         d.clinicName = document.getElementById('ob-clinic-name').value;
         d.clinicAddress = document.getElementById('ob-clinic-address').value;
+        d.city = document.getElementById('ob-city').value;
+        d.workingHours = document.getElementById('ob-hours').value;
         d.price = document.getElementById('ob-fee-off').value;
         d.emergency = document.getElementById('ob-emergency').value;
     } else if (s === 5) {
@@ -2865,62 +2941,75 @@ window.viewProviderDetails = function (id, collection) {
     const p = (collection === 'doctors' ? AppState.doctors : AppState.labs).find(item => item.id === id);
     if (!p) return;
 
+    const isLab = collection === 'labs';
+
     DOM.modalBody.innerHTML = `
         <div class="verification-details" style="text-align: left;">
             <div style="grid-column: 1/-1; display:flex; align-items:center; gap:20px; margin-bottom:20px; border-bottom:2px solid #eee; padding-bottom:15px;">
                 <img src="${p.image || 'https://via.placeholder.com/80'}" style="width:80px; height:80px; border-radius:50%; object-fit:cover;">
                 <div>
-                    <h2 style="margin:0;">${p.name}</h2>
-                    <p style="color:var(--text-muted); margin:0;">${p.specialty || 'Health Provider'} • ID: ${p.id}</p>
+                    <h2 style="margin:0;">${p.labName || p.name}</h2>
+                    <p style="color:var(--text-muted); margin:0;">${isLab ? 'Diagnostic Laboratory' : (p.specialty || 'Medical Professional')} • ID: ${p.id}</p>
                 </div>
             </div>
 
             <div class="detail-group">
-                <h4><i class="fas fa-info-circle"></i> Basic & Prof. Info</h4>
-                <p><strong>Mobile:</strong> OTP Verified</p>
-                <p><strong>Gender:</strong> ${p.gender || 'Not specified'}</p>
-                <p><strong>Reg. Number:</strong> <span style="color:var(--primary); font-weight:700;">${p.regNum || p.labRegNum || 'N/A'}</span></p>
-                <p><strong>Council/Authority:</strong> ${p.council || 'N/A'}</p>
-                <p><strong>Qualification:</strong> ${p.qualification || 'N/A'}</p>
-                <p><strong>Experience:</strong> ${p.experience || '0'} Years</p>
+                <h4><i class="fas fa-info-circle"></i> Basic & Owner Info</h4>
+                <p><strong>Owner Name:</strong> ${p.name || 'N/A'}</p>
+                <p><strong>Contact:</strong> ${p.phone || 'OTP Verified'}</p>
+                <p><strong>Email:</strong> ${p.email || 'N/A'}</p>
+                <p><strong>Gender/DOB:</strong> ${p.gender || 'N/A'} | ${p.dob || 'N/A'}</p>
+                <p><strong>Address:</strong> <span style="font-size:0.8rem;">${p.resAddress || 'N/A'}</span></p>
             </div>
 
             <div class="detail-group">
-                <h4><i class="fas fa-map-location-dot"></i> Clinic/Center Details</h4>
-                <p><strong>Name:</strong> ${p.clinicName || 'N/A'}</p>
-                <p><strong>Address:</strong> ${p.clinicAddress || 'N/A'}</p>
-                <div class="map-placeholder" style="height:120px;">
-                    <i class="fas fa-map-pin" style="color:var(--primary);"></i> ${p.clinicAddress ? 'Located in Map' : 'No Location Data'}
+                <h4><i class="fas fa-microscope"></i> ${isLab ? 'Technical Details' : 'Professional Info'}</h4>
+                ${isLab ? `
+                    <p><strong>Technician:</strong> ${p.techName || 'N/A'}</p>
+                    <p><strong>Tech Qual:</strong> ${p.techQual || 'N/A'}</p>
+                    <p><strong>Delivery Time:</strong> ${p.deliveryTime || 'N/A'}</p>
+                    <p><strong>Home Pickup:</strong> ${p.homeCollection || 'No'}</p>
+                    <p><strong>NABL Accredited:</strong> ${p.nabl || 'No'}</p>
+                    <p><strong>GST:</strong> ${p.gst || 'N/A'}</p>
+                ` : `
+                    <p><strong>Reg. Number:</strong> <span style="color:var(--primary); font-weight:700;">${p.regNum || 'N/A'}</span></p>
+                    <p><strong>Council:</strong> ${p.council || 'N/A'}</p>
+                    <p><strong>Qualification:</strong> ${p.qualification || 'N/A'}</p>
+                    <p><strong>Experience:</strong> ${p.experience || '0'} Years</p>
+                    <p><strong>Specialty:</strong> ${p.specialty || 'General'}</p>
+                `}
+            </div>
+
+            <div class="detail-group" style="grid-column: 1/-1;">
+                <h4><i class="fas fa-hospital-user"></i> Clinic/Center Details</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                    <div>
+                        <p><strong>Center Name:</strong> ${p.clinicName || 'N/A'}</p>
+                        <p><strong>City/Location:</strong> ${p.city || 'N/A'}</p>
+                        <p><strong>Working Hours:</strong> ${p.workingHours || 'N/A'}</p>
+                        <p><strong>Average Fee:</strong> ₹${p.price || '500'}</p>
+                        <p><strong>Emergency:</strong> ${p.emergency || 'No'}</p>
+                    </div>
+                    <div>
+                         <p><strong>Address:</strong> ${p.clinicAddress || 'N/A'}</p>
+                         <div class="map-placeholder" style="height:80px; font-size:0.7rem;">
+                            <i class="fas fa-map-pin"></i> GPS Location Fixed
+                         </div>
+                    </div>
                 </div>
-                <p><strong>Fees:</strong> ₹${p.price || '500'}</p>
             </div>
 
             <div class="detail-group" style="grid-column: 1/-1;">
                 <h4><i class="fas fa-file-shield"></i> Verified Documents & Portfolio</h4>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-bottom:15px;">
                     ${Object.entries(p.docs || {}).map(([key, url]) => `
-                        <div class="doc-preview-item">
-                            <i class="fas fa-file-pdf"></i>
-                            <span style="flex:1;">${key.toUpperCase()}</span>
-                            <a href="${url}" target="_blank" style="color:var(--primary); font-size:0.8rem;">Preview</a>
+                        <div class="doc-preview-item" style="padding:10px; border:1px solid #eee;">
+                            <i class="fas fa-file-alt"></i>
+                            <span style="flex:1; font-size:0.75rem;">${key.replace(/([A-Z])/g, ' $1').toUpperCase()}</span>
+                            <a href="${url}" target="_blank" style="color:var(--primary); font-size:0.75rem;"><i class="fas fa-external-link-alt"></i></a>
                         </div>
                     `).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">No documents uploaded.</p>'}
                 </div>
-                
-                ${p.catalog && p.catalog.length > 0 ? `
-                <h5 style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">Laboratory Test Catalog Images:</h5>
-                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px;">
-                    ${p.catalog.map(test => `
-                        <div style="border:1px solid #eee; border-radius:8px; padding:5px; text-align:center;">
-                            ${test.image ?
-            `<img src="${test.image}" style="width:100%; height:50px; object-fit:cover; border-radius:4px; cursor:pointer;" onclick="window.open('${test.image}', '_blank')">` :
-            `<div style="height:50px; background:#f9f9f9; display:flex; align-items:center; justify-content:center; color:#ccc;"><i class="fas fa-image"></i></div>`
-        }
-                            <p style="font-size:0.6rem; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${test.name}</p>
-                        </div>
-                    `).join('')}
-                </div>
-                ` : ''}
             </div>
 
             <div class="detail-group" style="grid-column: 1/-1; background:#fff8f8; padding:15px; border-radius:12px;">
@@ -2935,8 +3024,8 @@ window.viewProviderDetails = function (id, collection) {
                         <input type="number" id="admin-comm" value="20" style="width:100%; padding:8px;">
                     </div>
                     <div style="display:flex; align-items:flex-end; gap:10px;">
-                         <button class="btn-signup" style="background:#e74c3c; flex:1;" onclick="rejectProvider('${p.id}', '${collection}')">Reject</button>
-                         <button class="btn-signup" style="background:#2ecc71; flex:1;" onclick="approveProvider('${p.id}', '${collection}')">Approve</button>
+                         <button class="btn-signup" style="background:#e74c3c; flex:1;" onclick="rejectProvider('${p.id}', '${collection}')">Reject Now</button>
+                         <button class="btn-signup" style="background:#2ecc71; flex:1;" onclick="approveProvider('${p.id}', '${collection}')">Approve Now</button>
                     </div>
                 </div>
             </div>
