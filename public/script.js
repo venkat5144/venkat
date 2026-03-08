@@ -3135,9 +3135,9 @@ function renderUserListHTML(users) {
         const initial = userName.charAt(0).toUpperCase() || "?";
 
         let roleColor = 'var(--primary)'; // patient green
-        if (AppState.user.role === 'doctor') roleColor = 'var(--secondary)'; // doc blue
-        if (AppState.user.role === 'lab') roleColor = 'var(--primary)';
-        if (AppState.user.role === 'admin') roleColor = '#9B59B6'; // admin purple
+        if (userRole === 'doctor') roleColor = 'var(--secondary)'; // doc blue
+        if (userRole === 'lab') roleColor = 'var(--primary)';
+        if (userRole === 'admin') roleColor = '#9B59B6'; // admin purple
 
         return `
             <div class="tile-item" style="padding:15px; margin-bottom:12px; border: 1px solid #f5f5f5; border-radius:15px;">
