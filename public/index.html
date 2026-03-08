@@ -197,13 +197,13 @@
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
                         <h2 style="font-size:1.8rem; font-weight:800; color: #2C3E50;">Browse by Speciality</h2>
                         <a href="javascript:void(0)" onclick="setCategory('doctors')"
-                            style="color:var(--secondary); font-weight:700; font-size:0.95rem; text-decoration: none;">View
+                            style="color:var(--primary); font-weight:700; font-size:0.95rem; text-decoration: none;">View
                             All Specialities <i class="fas fa-arrow-right"
                                 style="font-size: 0.8rem; margin-left: 5px;"></i></a>
                     </div>
                     <div class="cat-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px;">
                         <div class="category-card" onclick="setSpecialty('Cardiologist')">
-                            <div class="cat-icon" style="background: #EBF5FB; color: #3498DB;"><i
+                            <div class="cat-icon" style="background: #FFF1F2; color: #F43F5E;"><i
                                     class="fas fa-heart-pulse"></i></div>
                             <span
                                 style="font-weight: 700; font-size: 0.95rem; display: block; margin-top: 10px;">Cardiologist</span>
@@ -253,18 +253,18 @@
                         <button class="action-btn" onclick="showPatientTab('pharmacy')"
                             style="background: #fff; border: 1px solid var(--border); padding: 25px; border-radius: var(--radius-lg); display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer; transition: all 0.3s; box-shadow: var(--shadow-sm);">
                             <div
-                                style="width: 50px; height: 50px; border-radius: 50%; background: var(--secondary-light); color: var(--secondary); display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+                                style="width: 50px; height: 50px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
                                 <i class="fas fa-cart-shopping"></i>
                             </div>
-                            <span style="font-weight: 700; font-size: 0.95rem; color: #2C3E50;">Order Medicines</span>
+                            <span style="font-weight: 700; font-size: 0.95rem; color: #1A1C1E;">Order Medicines</span>
                         </button>
                         <button class="action-btn" onclick="setCategory('labs')"
                             style="background: #fff; border: 1px solid var(--border); padding: 25px; border-radius: var(--radius-lg); display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer; transition: all 0.3s; box-shadow: var(--shadow-sm);">
                             <div
-                                style="width: 50px; height: 50px; border-radius: 50%; background: #FFF9F0; color: #FF9800; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+                                style="width: 50px; height: 50px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
                                 <i class="fas fa-flask-vial"></i>
                             </div>
-                            <span style="font-weight: 700; font-size: 0.95rem; color: #2C3E50;">Book Lab Test</span>
+                            <span style="font-weight: 700; font-size: 0.95rem; color: #1A1C1E;">Book Lab Test</span>
                         </button>
                     </div>
                 </section>
@@ -321,7 +321,8 @@
                             onclick="setSpecialty('General Physician')" class="spec-item-premium">
                             <div class="spec-icon"
                                 style="background: #EBFAF0; color: #2ECC71; width: 80px; height: 80px; margin: 0 auto 15px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
-                                <i class="fas fa-user-doctor"></i></div>
+                                <i class="fas fa-user-doctor"></i>
+                            </div>
                             <h4 style="font-size: 1.1rem; color: #2C3E50;">General Physician</h4>
                             <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">Cold, Fever, Flu
                             </p>
@@ -330,7 +331,8 @@
                             onclick="setSpecialty('Pediatrics')" class="spec-item-premium">
                             <div class="spec-icon"
                                 style="background: #FEF9E7; color: #F1C40F; width: 80px; height: 80px; margin: 0 auto 15px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
-                                <i class="fas fa-baby"></i></div>
+                                <i class="fas fa-baby"></i>
+                            </div>
                             <h4 style="font-size: 1.1rem; color: #2C3E50;">Pediatrics</h4>
                             <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">Child Specialist
                             </p>
@@ -339,7 +341,8 @@
                             onclick="setSpecialty('Cardiology')" class="spec-item-premium">
                             <div class="spec-icon"
                                 style="background: #EBF5FB; color: #3498DB; width: 80px; height: 80px; margin: 0 auto 15px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
-                                <i class="fas fa-heart-pulse"></i></div>
+                                <i class="fas fa-heart-pulse"></i>
+                            </div>
                             <h4 style="font-size: 1.1rem; color: #2C3E50;">Cardiology</h4>
                             <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">Heart Specialist
                             </p>
@@ -348,7 +351,8 @@
                             onclick="setSpecialty('Gynaecology')" class="spec-item-premium">
                             <div class="spec-icon"
                                 style="background: #F4ECF7; color: #8E44AD; width: 80px; height: 80px; margin: 0 auto 15px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
-                                <i class="fas fa-person-pregnant"></i></div>
+                                <i class="fas fa-person-pregnant"></i>
+                            </div>
                             <h4 style="font-size: 1.1rem; color: #2C3E50;">Gynaecology</h4>
                             <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">Women's Health</p>
                         </div>
@@ -356,7 +360,8 @@
                             onclick="setSpecialty('Dermatology')" class="spec-item-premium">
                             <div class="spec-icon"
                                 style="background: #FBEEE6; color: #E67E22; width: 80px; height: 80px; margin: 0 auto 15px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
-                                <i class="fas fa-hand-holding-medical"></i></div>
+                                <i class="fas fa-hand-holding-medical"></i>
+                            </div>
                             <h4 style="font-size: 1.1rem; color: #2C3E50;">Dermatology</h4>
                             <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">Skin Issues</p>
                         </div>

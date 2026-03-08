@@ -864,7 +864,7 @@ function renderGrid() {
                             <i class="fas fa-check-circle"></i> VERIFIED
                         </div>
                     </div>
-                    <p style="color:var(--secondary); font-size:1rem; font-weight:700; margin:5px 0;">${item.specialty || 'Medical Specialist'}</p>
+                    <p style="color:var(--text-muted); font-size:1rem; font-weight:700; margin:5px 0;">${item.specialty || 'Medical Specialist'}</p>
                     <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
                         <div style="display:flex; color:#F1C40F; font-size:0.9rem; gap:2px;">
                             ${Array(5).fill(0).map((_, i) => `<i class="${i < Math.floor(rating) ? 'fas' : 'far'} fa-star"></i>`).join('')}
@@ -872,7 +872,7 @@ function renderGrid() {
                         <span style="color:var(--text-muted); font-size:0.85rem; font-weight:600;">${rating} (${reviews} reviews)</span>
                     </div>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:15px; border-top:1px solid var(--border); padding-top:15px;">
-                        <div style="font-size:0.85rem; color:#666;"><i class="fas fa-briefcase" style="color:var(--secondary);"></i> <strong>${exp}+ Years</strong> Exp</div>
+                        <div style="font-size:0.85rem; color:#666;"><i class="fas fa-briefcase" style="color:var(--primary);"></i> <strong>${exp}+ Years</strong> Exp</div>
                         <div style="font-size:0.85rem; color:#666;"><i class="fas fa-map-marker-alt" style="color:var(--primary);"></i> Mumbai, MH</div>
                     </div>
                 </div>
@@ -883,8 +883,8 @@ function renderGrid() {
                      <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:2px; font-weight:600; text-transform:uppercase;">Next Available Slot</p>
                     <p style="font-size:0.9rem; color:var(--primary); font-weight:800; margin:0;"><i class="fas fa-calendar-alt"></i> Today, ${nextSlot}</p>
                 </div>
-                <button class="btn-signup" style="background:var(--secondary); padding:12px 30px; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);" onclick="event.stopPropagation(); openBooking('${item.id}')">
-                    Book Appointment
+                <button class="btn-signup" style="background:var(--primary); padding:12px 30px;" onclick="event.stopPropagation(); openBooking('${item.id}')">
+                    Book Now
                 </button>
             </div>
         </div>
@@ -3134,8 +3134,8 @@ function renderUserListHTML(users) {
         const userRole = (u.role || "patient").toLowerCase();
         const initial = userName.charAt(0).toUpperCase() || "?";
 
-        let roleColor = 'var(--primary)'; // patient green
-        if (userRole === 'doctor') roleColor = 'var(--secondary)'; // doc blue
+        let roleColor = '#2ECC71'; // patient green
+        if (userRole === 'doctor') roleColor = 'var(--primary)'; // doc red
         if (userRole === 'lab') roleColor = 'var(--primary)';
         if (userRole === 'admin') roleColor = '#9B59B6'; // admin purple
 
