@@ -397,17 +397,19 @@
                 <section class="listings container" id="list-section"
                     style="padding-top: 50px; border-top: 1px solid #EEE;">
                     <div class="section-header"
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-                        <h2 id="section-title">Verified Doctors</h2>
-                        <div class="category-filters" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button class="filter-btn active">All</button>
-                            <select id="lang-switch" class="filter-select" style="border-radius:50px;">
+                        style="margin-bottom: 30px; display: flex; flex-direction: column; align-items: flex-start; gap: 20px;">
+                        <h2 id="section-title" style="margin: 0;">Verified Doctors</h2>
+                        <div class="category-filters" style="display: flex; gap: 10px; flex-wrap: wrap; width: 100%;">
+                            <button class="filter-btn active" style="flex: none;">All</button>
+                            <select id="lang-switch" class="filter-select"
+                                style="border-radius:50px; flex: 1; min-width: 120px;">
                                 <option value="">Any Language</option>
                                 <option value="english">English</option>
                                 <option value="hindi">Hindi</option>
                                 <option value="telugu">Telugu</option>
                             </select>
-                            <select id="filter-rating" class="filter-select" style="border-radius:50px;">
+                            <select id="filter-rating" class="filter-select"
+                                style="border-radius:50px; flex: 1; min-width: 120px;">
                                 <option value="0">Any Rating</option>
                                 <option value="4">4.0+ Stars</option>
                                 <option value="4.5">4.5+ Stars</option>
@@ -1346,28 +1348,6 @@
         </div>
     </div>
 
-    <!-- AI Chatbot Widget -->
-    <div id="ai-bot-toggle" class="ai-bot-toggle">
-        <i class="fas fa-robot"></i>
-    </div>
-    <div id="ai-chat-window" class="ai-chat-window hidden">
-        <div class="chat-header">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <i class="fas fa-robot"></i>
-                <span style="font-weight:700;">HealthMate AI</span>
-            </div>
-            <i class="fas fa-times" id="close-chat" style="cursor:pointer;"></i>
-        </div>
-        <div class="chat-messages" id="chat-messages">
-            <div class="msg ai">Hi! I'm your HealthMate assistant. How can I help you today? You can ask me to find a
-                doctor, book an appointment, or explain a test.</div>
-        </div>
-        <div class="chat-input">
-            <input type="text" id="chat-user-input" placeholder="Type a message...">
-            <button class="btn-book" id="send-chat" style="padding: 8px 15px;"><i
-                    class="fas fa-paper-plane"></i></button>
-        </div>
-    </div>
 
     <!-- Premium Professional Footer -->
     <footer

@@ -154,21 +154,10 @@ const DOM = {
     modal: document.getElementById('booking-modal'),
     modalBody: document.getElementById('modal-body'),
     toastContainer: document.getElementById('toast-container'),
-    aiToggle: document.getElementById('ai-bot-toggle'),
-    aiWindow: document.getElementById('ai-chat-window'),
-    chatMessages: document.getElementById('chat-messages'),
-    chatInput: document.getElementById('chat-user-input'),
-    chatSend: document.getElementById('send-chat'),
     themeToggle: document.getElementById('theme-toggle'),
     langSwitch: document.getElementById('lang-switch')
 };
 
-function toggleChat() {
-    DOM.aiWindow.classList.toggle('hidden');
-    if (!DOM.aiWindow.classList.contains('hidden')) {
-        DOM.chatInput.focus();
-    }
-}
 
 
 const Translations = {
@@ -304,42 +293,6 @@ function init() {
     }
 }
 
-async function handleChat() {
-    const input = DOM.chatInput.value.trim();
-    if (!input) return;
-
-    // Append User Message
-    DOM.chatMessages.innerHTML += `<div class="msg user">${input}</div>`;
-    DOM.chatInput.value = '';
-    DOM.chatMessages.scrollTop = DOM.chatMessages.scrollHeight;
-
-    // AI Processing
-    setTimeout(() => {
-        let reply = "I'm not sure about that. Try asking 'find a cardiologist', 'test preparation', or 'book an appointment'.";
-        const query = input.toLowerCase();
-
-        if (query.includes('doctor') || query.includes('find')) {
-            reply = "I've filtered the doctors list for you! Look at the 'Verified Doctors' section. You can find specialists in Cardiology, Pediatrics, etc.";
-            setCategory('doctors');
-        } else if (query.includes('lab') || query.includes('test')) {
-            reply = "I've switched to Lab Tests for you. Common tests like Blood Count, MRI, and Thyroid panels are available below.";
-            setCategory('labs');
-        } else if (query.includes('preparation') || query.includes('fasting')) {
-            reply = "Most blood tests require 8-12 hours of fasting. Drink only water. Avoid caffeine or heavy meals before the test.";
-        } else if (query.includes('fee') || query.includes('price')) {
-            reply = "Our consults start from as low as ₹500. Lab tests vary by complexity. Check the catalog for details.";
-        } else if (query.includes('appointment') || query.includes('book')) {
-            reply = "Choose a provider and click 'Book Now'. My Smart Assistant will recommend the best slot with minimum wait time.";
-        } else if (query.includes('token') || query.includes('queue')) {
-            reply = "After booking, you'll receive a Token Number. You can track your position in the live queue via your 'Bookings' tab.";
-        } else if (query.includes('hello') || query.includes('hi')) {
-            reply = "Hello! I'm your HealthMate assistant. I can help you find doctors, understand lab preparations, or track your reports.";
-        }
-
-        DOM.chatMessages.innerHTML += `<div class="msg ai">${reply}</div>`;
-        DOM.chatMessages.scrollTop = DOM.chatMessages.scrollHeight;
-    }, 800);
-}
 
 // --- Firebase Real-time Sync ---
 function setupRealtimeSync() {
@@ -1029,12 +982,8 @@ function setupEventListeners() {
         DOM.modal.classList.add('hidden');
     });
 
-    // Theme & Chat & Lang
+    // Theme & Lang
     if (DOM.themeToggle) DOM.themeToggle.onclick = toggleTheme;
-    if (DOM.aiToggle) DOM.aiToggle.onclick = toggleChat;
-    if (document.getElementById('close-chat')) document.getElementById('close-chat').onclick = toggleChat;
-    if (DOM.chatSend) DOM.chatSend.onclick = handleChat;
-    if (DOM.chatInput) DOM.chatInput.onkeypress = (e) => { if (e.key === 'Enter') handleChat(); };
     if (DOM.langSwitch) DOM.langSwitch.onchange = (e) => {
         AppState.activeFilters.language = e.target.value;
         renderGrid();

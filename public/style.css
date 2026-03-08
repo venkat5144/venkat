@@ -1347,12 +1347,6 @@ a {
         overflow: hidden;
     }
 
-    .ai-chat-window {
-        width: calc(100% - 40px);
-        right: 20px;
-        left: 20px;
-        bottom: calc(90px + env(safe-area-inset-bottom, 0px));
-    }
 
     .card-list {
         grid-template-columns: 1fr !important;
@@ -1413,100 +1407,6 @@ a {
     border-radius: 10px;
 }
 
-/* Floating AI Bot */
-.ai-bot-toggle {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
-    width: 65px;
-    height: 65px;
-    background: var(--primary);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.8rem;
-    cursor: pointer;
-    box-shadow: 0 10px 25px rgba(44, 62, 80, 0.2);
-    z-index: 10000;
-    transition: var(--transition-smooth);
-}
-
-.ai-bot-toggle:hover {
-    transform: scale(1.05);
-}
-
-.ai-chat-window {
-    position: fixed;
-    bottom: 110px;
-    right: 30px;
-    width: 380px;
-    height: 500px;
-    background: var(--white);
-    border-radius: 20px;
-    box-shadow: var(--shadow-medium);
-    z-index: 10000;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.chat-header {
-    background: var(--primary);
-    color: white;
-    padding: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.chat-messages {
-    flex: 1;
-    padding: 15px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.msg {
-    max-width: 80%;
-    padding: 10px 15px;
-    border-radius: 15px;
-    font-size: 0.9rem;
-    line-height: 1.4;
-}
-
-.msg.ai {
-    align-self: flex-start;
-    background: var(--bg-light);
-    color: var(--text-main);
-}
-
-.msg.user {
-    align-self: flex-end;
-    background: var(--primary);
-    color: white;
-}
-
-.chat-input {
-    padding: 15px;
-    display: flex;
-    gap: 10px;
-    border-top: 1px solid #eee;
-}
-
-.chat-input input {
-    flex: 1;
-    border: 1px solid #ddd;
-    border-radius: 30px;
-    padding: 8px 15px;
-    outline: none;
-    background: var(--white);
-    color: var(--text-main);
-}
 
 /* Theme Toggle */
 .theme-switch {
