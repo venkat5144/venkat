@@ -175,7 +175,6 @@ const Translations = {
     en: {
         welcome: "Welcome to HealthMate",
         find_doc: "Find Doctors",
-        video: "Video Consult",
         labs: "Lab Tests",
         search_placeholder: "Search doctors, clinics, hospitals, etc.",
         book_now: "Book Now"
@@ -183,7 +182,6 @@ const Translations = {
     te: {
         welcome: "హెల్త్‌మేట్ కు స్వాగతం",
         find_doc: "డాక్టర్లను కనుగొనండి",
-        video: "వీడియో కన్సల్ట్",
         labs: "ల్యాబ్ పరీక్షలు",
         search_placeholder: "డాక్టర్లు, క్లినిక్‌లు, ఆసుపత్రులు మొదలైనవాటిని వెతకండి",
         book_now: "ఇప్పుడే బుక్ చేయండి"
@@ -191,7 +189,6 @@ const Translations = {
     hi: {
         welcome: "हेल्थमेट में आपका स्वागत है",
         find_doc: "डॉक्टर खोजें",
-        video: "वीडियो कॉल",
         labs: "लैब टेस्ट",
         search_placeholder: "डॉक्टर, क्लीनिक, अस्पताल आदि खोजें",
         book_now: "अभी बुक करें"
@@ -867,7 +864,6 @@ function renderGrid() {
                     <p style="font-size:0.85rem; color:#666;"><i class="fas fa-medal" style="color:var(--accent);"></i> ${exp} years experience overall</p>
                     <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
                         <span class="availability-badge"><i class="fas fa-clock"></i> Next: ${nextSlot}</span>
-                        <span class="availability-badge video"><i class="fas fa-video"></i> Online Consult</span>
                     </div>
                 </div>
             </div>
@@ -901,45 +897,11 @@ window.setCategory = function (cat) {
         return;
     }
 
-    if (cat === 'Video Consult') {
-        AppState.currentType = 'doctors';
-        renderVideoConsult();
-        return;
-    }
-
     AppState.currentType = cat === 'Find Doctors' ? 'doctors' : cat; // 'doctors' or 'labs'
     AppState.activeFilters.category = 'All';
     DOM.sectionTitle.innerText = AppState.currentType === 'doctors' ? 'Verified Doctors' : 'Diagnostic Labs';
     renderGrid();
     document.getElementById('list-section').scrollIntoView({ behavior: 'smooth' });
-};
-
-window.renderVideoConsult = function () {
-    DOM.sectionTitle.innerText = "Talk to a Doctor Online (Live)";
-    const online = AppState.doctors.filter(d => d.approved);
-    const grid = document.getElementById('provider-grid');
-    if (!grid) return;
-
-    if (online.length === 0) {
-        grid.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">No doctors online currently.</p>';
-        return;
-    }
-
-    grid.innerHTML = online.map(d => `
-        <div class="doctor-card" onclick="openBooking('${d.id}')">
-            <div class="card-img" style="background-image: url('${d.image}')">
-                <span class="badge-verified" style="background:#2ecc71;"><i class="fas fa-video"></i> Online Now</span>
-            </div>
-            <div class="card-content">
-                <h3 class="card-title">${d.name}</h3>
-                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;"><i class="fas fa-language"></i> English, Hindi • 8+ Yrs Exp</p>
-                <div class="card-footer">
-                    <div class="card-price">₹${d.price} <span>/Consult</span></div>
-                    <button class="btn-book" style="background:var(--secondary);">Connect Now</button>
-                </div>
-            </div>
-        </div>
-    `).join('');
 };
 
 window.setSpecialty = function (spec) {
@@ -3390,7 +3352,6 @@ function detectFraudulentUsers() {
 window.saveAdminSettings = function () {
     const comm = document.getElementById('set-commission').value;
     const sla = document.getElementById('set-sla').value;
-    const video = document.getElementById('set-video').checked;
 
     showToast(`Configurations Updated! Commission: ${comm}%`, "success");
 };
