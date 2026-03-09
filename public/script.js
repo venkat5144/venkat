@@ -134,6 +134,10 @@ const AppState = {
     currentOnboardingStep: 1,
     onboardingData: {},
     cms_lab_offers: [],
+    testCatalog: [],
+    labTests: [], // Specific tests offered by the logged-in lab
+    labPackages: [],
+    testSearchResults: []
 };
 
 // --- DOM Elements ---
@@ -339,12 +343,31 @@ function setupRealtimeSync() {
         refreshActiveDashboard();
     }, err => console.warn("Appointment Sync Error:", err.message));
 
-    // Listen for CMS Lab Offers
-    db.collection('cms_lab_offers').orderBy('order', 'asc').onSnapshot(snap => {
+    // 6. CMS Lab Offers
+    db.collection('cms_lab_offers').onSnapshot(snap => {
         AppState.cms_lab_offers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderCMSLabOffers();
-        renderAdminCMSLabOffers(); // Update admin view too
-    }, err => console.warn("CMS Sync Error:", err.message));
+        if (typeof renderCMSLabOffers === 'function') renderCMSLabOffers();
+        if (typeof renderAdminCMSLabOffers === 'function') renderAdminCMSLabOffers();
+    }, err => console.warn("CMS Sync Error:", err.message)); // This error handler belongs to cms_lab_offers
+
+    // 7. Master Test Catalog
+    db.collection('test_catalog').onSnapshot(snap => {
+        AppState.testCatalog = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const select = document.getElementById('master-test-select');
+        if (select) {
+            select.innerHTML = '<option value="">-- Choose from Catalog --</option>' +
+                AppState.testCatalog.map(t => `<option value="${t.id}">${t.name} (${t.category})</option>`).join('');
+        }
+    }, err => console.warn("Test Catalog Sync Error:", err.message));
+
+    // 8. Lab Specific Tests (Prices)
+    db.collection('lab_test_prices').onSnapshot(snap => {
+        AppState.allLabTests = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (AppState.user && AppState.user.role === 'lab') {
+            if (typeof renderLabCatalog === 'function') renderLabCatalog();
+            if (typeof renderLabPackages === 'function') renderLabPackages();
+        }
+    }, err => console.warn("Lab Test Prices Sync Error:", err.message));
 }
 
 // --- Authentication Logic ---
@@ -788,6 +811,9 @@ function renderGrid() {
     if (!grid) return;
 
     const filtered = data.filter(item => {
+        // Only show approved providers to patients/guests
+        if (!item.approved && (!AppState.user || !AppState.user.isAdmin)) return false;
+
         const matchesCat = AppState.activeFilters.category === 'All' || item.specialty === AppState.activeFilters.category;
         const matchesSearch = item.name.toLowerCase().includes(AppState.activeFilters.search.toLowerCase()) ||
             (item.specialty && item.specialty.toLowerCase().includes(AppState.activeFilters.search.toLowerCase()));
@@ -1667,6 +1693,234 @@ window.deleteRecord = async function (id) {
     }
 };
 
+window.handleTestSearch = function (e) {
+    const query = e.target.value.toLowerCase().trim();
+    const resultsContainer = document.getElementById('test-search-results-mini');
+    if (!query || query.length < 2) {
+        resultsContainer.classList.add('hidden');
+        return;
+    }
+
+    const matches = AppState.testCatalog.filter(t =>
+        t.name.toLowerCase().includes(query) ||
+        t.category.toLowerCase().includes(query)
+    ).slice(0, 5);
+
+    if (matches.length === 0) {
+        resultsContainer.innerHTML = `<p style="grid-column: 1/-1; padding: 15px; text-align: center; color: var(--text-muted); background: #f9f9f9; border-radius: 12px;">No tests found matching "${query}"</p>`;
+    } else {
+        resultsContainer.innerHTML = matches.map(t => `
+            <div class="tile-item" style="padding: 12px; cursor: pointer; border: 1px solid #f0f0f0; transition: all 0.2s;" onclick="selectTestForSearch('${t.id}', '${t.name}')">
+                <div style="width: 35px; height: 35px; background: var(--primary-light); color: var(--primary); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">
+                    <i class="fas fa-flask"></i>
+                </div>
+                <div style="flex: 1; margin-left: 12px;">
+                    <h5 style="font-size: 0.85rem; margin-bottom: 2px;">${t.name}</h5>
+                    <p style="font-size: 0.7rem; color: var(--text-muted);">${t.category}</p>
+                </div>
+                <i class="fas fa-arrow-right" style="font-size: 0.7rem; color: #ccc;"></i>
+            </div>
+        `).join('');
+    }
+    resultsContainer.classList.remove('hidden');
+};
+
+window.selectTestForSearch = function (testId, testName) {
+    document.getElementById('patient-test-search').value = testName;
+    document.getElementById('test-search-results-mini').classList.add('hidden');
+    executeTestSearch(testId);
+};
+
+window.executeTestSearch = async function (specificTestId = null) {
+    const query = specificTestId || document.getElementById('patient-test-search').value.toLowerCase().trim();
+    if (!query) return showToast("Please enter a test name", "warning");
+
+    showToast("Searching centers...");
+
+    // 1. Identify Test IDs
+    let targetTestIds = [];
+    if (specificTestId) {
+        targetTestIds = [specificTestId];
+    } else {
+        targetTestIds = AppState.testCatalog
+            .filter(t => t.name.toLowerCase().includes(query))
+            .map(t => t.id);
+    }
+
+    if (targetTestIds.length === 0) return showToast("No such test in our catalog", "info");
+
+    // 2. Find Labs offering these tests (filter by approved labs)
+    const offers = (AppState.allLabTests || []).filter(o => {
+        const lab = AppState.labs.find(l => l.id === o.labId);
+        return targetTestIds.includes(o.testId) && lab?.approved;
+    });
+
+    if (offers.length === 0) return showToast("No labs currently offering this test", "info");
+
+    // 3. Map to UI
+    const results = offers.map(o => {
+        const lab = AppState.labs.find(l => l.id === o.labId);
+        const test = AppState.testCatalog.find(t => t.id === o.testId);
+        const dist = (window.currentLat && window.currentLng && lab?.lat) ?
+            getHaversineDistance(window.currentLat, window.currentLng, lab.lat, lab.lng) : 'N/A';
+
+        return {
+            ...o,
+            labName: lab?.name || 'Local Diagnostic',
+            labRating: lab?.rating || '4.5',
+            labImage: lab?.image || '',
+            testName: test?.name || 'Diagnostic Test',
+            distance: dist
+        };
+    }).sort((a, b) => a.price - b.price); // Lowest price first
+
+    // 4. Update Grid
+    const grid = document.getElementById('grid-container');
+    if (!grid) return;
+
+    AppState.currentType = 'labs'; // Switch context
+    document.getElementById('section-title').innerText = `Diagnostic Centers for "${query}"`;
+
+    grid.innerHTML = results.map(r => `
+        <div class="doctor-card" style="display:flex; flex-direction:column;">
+            <div style="padding:20px; flex:1;">
+                <div style="display:flex; gap:15px; margin-bottom:15px;">
+                    <div class="profile-img-large" style="width:70px; height:70px; font-size:1.5rem;">
+                        ${r.labImage ? `<img src="${r.labImage}" style="width:100%; height:100%; border-radius:15px; object-fit:cover;">` : r.labName[0]}
+                    </div>
+                    <div>
+                        <h3 style="font-size:1rem; margin-bottom:5px;">${r.labName}</h3>
+                        <p style="font-size:0.8rem; color:var(--text-muted);"><i class="fas fa-location-dot"></i> ${r.distance} km away</p>
+                        <div style="margin-top:5px; font-size:0.75rem; color:#f1c40f;">
+                            <i class="fas fa-star"></i> ${r.labRating} <span style="color:#aaa;">(Verified)</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="background:#f9f9f9; padding:12px; border-radius:10px; border:1px solid #eee;">
+                    <h4 style="font-size:0.85rem; margin-bottom:2px;">${r.testName}</h4>
+                    <p style="font-size:0.75rem; color:var(--text-muted);">${r.homeCollection ? '<i class="fas fa-truck-pickup" style="color:#2ecc71;"></i> Home Sample Available' : '<i class="fas fa-building" style="color:#3498db;"></i> Lab Visit Required'}</p>
+                </div>
+            </div>
+            <div style="padding:15px 20px; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <p style="font-size:0.7rem; color:var(--text-muted); margin:0;">Standard Price</p>
+                    <h3 style="color:var(--primary); margin:0;">₹${r.price}</h3>
+                </div>
+                <button class="btn-signup" onclick="openLabBooking('${r.labId}', '${r.testId}', ${r.price})">Book Test</button>
+            </div>
+        </div>
+    `).join('');
+};
+
+window.openLabBooking = function (labId, testId, basePrice) {
+    if (!AppState.user) return showToast("Please login to book", "warning");
+
+    const lab = AppState.labs.find(l => l.id === labId);
+    const test = AppState.testCatalog.find(t => t.id === testId);
+    const labOffer = AppState.allLabTests.find(o => o.labId === labId && o.testId === testId);
+
+    AppState.selectedSlot = null;
+    const slots = ['08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '04:00 PM', '05:00 PM'];
+
+    DOM.modalBody.innerHTML = `
+        <div class="booking-flow" style="text-align:left;">
+            <h3 style="margin-bottom:5px;">Book ${test?.name}</h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">at ${lab?.name}</p>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:25px;">
+                <div class="input-group">
+                    <label>Collection Method</label>
+                    <select id="booking-col-method" onchange="updateLabBookingPrice(${basePrice})" style="width:100%; padding:12px; border-radius:12px; border:1.5px solid #eee;">
+                        <option value="lab">Lab Visit (₹0 Extra)</option>
+                        ${labOffer?.homeCollection ? '<option value="home">Home Collection (+₹150)</option>' : ''}
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Preferred Date</label>
+                    <input type="date" id="booking-date" min="${new Date().toISOString().split('T')[0]}" style="width:100%; padding:12px; border-radius:12px; border:1.5px solid #eee;">
+                </div>
+            </div>
+
+            <label style="font-weight:700; display:block; margin-bottom:12px;">Select Time Slot</label>
+            <div class="slot-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:25px;">
+                ${slots.map(s => `<div class="slot-item" onclick="selectSlot(this, '${s}')" style="border:1.5px solid #eee; padding:10px; border-radius:12px; text-align:center; cursor:pointer;">${s}</div>`).join('')}
+            </div>
+
+            <div id="home-address-group" class="hidden">
+                 <div class="input-group">
+                    <label>Sample Pickup Address</label>
+                    <textarea id="booking-address" placeholder="Enter full address for pickup" style="width:100%; min-height:80px; padding:12px; border-radius:12px; border:1.5px solid #eee;">${AppState.user.address || ''}</textarea>
+                </div>
+            </div>
+
+            <div class="payment-summary" style="background:#f9f9f9; padding:20px; border-radius:15px; margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span style="color:#666;">Test Price:</span>
+                    <span style="font-weight:700;">₹${basePrice}</span>
+                </div>
+                <div id="col-fee-row" class="hidden" style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span style="color:#666;">Collection Fee:</span>
+                    <span style="font-weight:700;">₹150</span>
+                </div>
+                <div style="border-top:1px dashed #ddd; padding-top:10px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:800;">Total Amount:</span>
+                    <span id="lab-booking-total" style="font-size:1.4rem; font-weight:900; color:var(--primary);">₹${basePrice}</span>
+                </div>
+            </div>
+
+            <button class="btn-signup" style="width:100%; padding:15px; font-size:1.1rem;" onclick="confirmLabBooking('${labId}', '${testId}', '${test?.name}')">Confirm & Pay</button>
+        </div>
+    `;
+    DOM.modal.classList.remove('hidden');
+};
+
+window.updateLabBookingPrice = function (base) {
+    const method = document.getElementById('booking-col-method').value;
+    const isHome = method === 'home';
+    const total = isHome ? base + 150 : base;
+
+    document.getElementById('lab-booking-total').innerText = `₹${total}`;
+    document.getElementById('home-address-group').classList.toggle('hidden', !isHome);
+    document.getElementById('col-fee-row').classList.toggle('hidden', !isHome);
+};
+
+window.confirmLabBooking = async function (labId, testId, testName) {
+    if (!AppState.selectedSlot) return showToast("Please select a time slot", "warning");
+    const date = document.getElementById('booking-date').value;
+    if (!date) return showToast("Please select a date", "warning");
+
+    const method = document.getElementById('booking-col-method').value;
+    const address = document.getElementById('booking-address').value;
+    const finalPrice = parseInt(document.getElementById('lab-booking-total').innerText.replace('₹', ''));
+
+    if (method === 'home' && !address) return showToast("Pickup address is required for home collection", "warning");
+
+    // Reuse processPayment logic
+    AppState.pendingBooking = {
+        labId, testId, testName, date, slot: AppState.selectedSlot,
+        method, address, price: finalPrice, type: 'labs'
+    };
+
+    // For simplicity, directly trigger confirmBooking (or processPayment if integration needed)
+    // Here we'll simulate the successful payment flow
+    showToast("Initiating payment...");
+
+    // In real app, call rzp here. For now, we confirm.
+    setTimeout(() => {
+        window.confirmBooking(labId, 'labs', {
+            targetName: AppState.labs.find(l => l.id === labId).name,
+            serviceName: testName,
+            price: finalPrice,
+            date: date,
+            slot: AppState.selectedSlot,
+            homeCollection: method === 'home',
+            patientAddress: address,
+            paymentStatus: 'Paid',
+            paymentMethod: 'Online'
+        });
+    }, 1000);
+};
+
 window.showProfileSub = function (sub, event) {
     document.querySelectorAll('.profile-sub-section').forEach(el => el.classList.add('hidden'));
     document.getElementById(`profile-${sub}`).classList.remove('hidden');
@@ -2502,10 +2756,29 @@ window.saveLabProfile = async function () {
 };
 
 
+window.showLabTab = function (tab, event) {
+    const targetId = `lab-${tab}-tab`;
+    const targetTab = document.getElementById(targetId);
+    if (!targetTab) return;
+
+    document.querySelectorAll('#lab-view .doctor-tab').forEach(el => el.classList.add('hidden'));
+    targetTab.classList.remove('hidden');
+
+    document.querySelectorAll('#lab-view .menu-item').forEach(btn => btn.classList.remove('active'));
+    if (event && event.currentTarget) event.currentTarget.classList.add('active');
+
+    if (tab === 'summary') renderLabDashboard();
+    if (tab === 'bookings') renderLabBookings();
+    if (tab === 'catalog') renderLabCatalog();
+    if (tab === 'packages') renderLabPackages();
+    if (tab === 'technician') renderLabTechnician();
+    if (tab === 'wallet') renderWallet('lab');
+    if (tab === 'profile') renderMultiClinics();
+    if (tab === 'docs') renderLabDocs();
+};
+
 function renderLabDashboard() {
     console.log("[DASHBOARD] Rendering Lab View");
-    const list = document.getElementById('lab-requests-list');
-    const catalogList = document.getElementById('lab-catalog-list');
     const myApps = AppState.appointments.filter(a => a.targetId === AppState.user.id);
 
     if (AppState.user) {
@@ -2525,107 +2798,347 @@ function renderLabDashboard() {
     const summaryMetrics = document.getElementById('lab-summary-metrics');
     if (summaryMetrics) {
         const now = new Date();
-        const thisMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const monthlyApps = myApps.filter(a => a.date && a.date.startsWith(thisMonthStr));
-        const monthEarnings = monthlyApps.filter(a => a.status === 'approved').reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
-        const commission = Math.floor(monthEarnings * 0.20);
-        const netEarnings = monthEarnings - commission;
-
-        const pendingSettlement = myApps.filter(a => a.status === 'approved' && a.payoutStatus === 'Pending').reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
-        const upcomingPayout = myApps.filter(a => a.payoutStatus === 'Settled' && a.payoutDate && a.payoutDate.toDate() > now).reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
-        const settledPayout = myApps.filter(a => a.payoutStatus === 'Settled' && a.payoutDate && a.payoutDate.toDate() <= now).reduce((sum, a) => sum + (parseInt(a.price) || 0), 0);
-
         const commRate = (AppState.user.commissionRate || 20) / 100;
         const netFactor = 1 - commRate;
 
-        const netPending = Math.floor(pendingSettlement * netFactor);
-        const netUpcoming = Math.floor(upcomingPayout * netFactor);
-        const netSettled = Math.floor(settledPayout * netFactor);
+        const netPending = myApps.filter(a => a.status === 'approved' && a.payoutStatus === 'Pending')
+            .reduce((sum, a) => sum + Math.floor((parseInt(a.price) || 0) * netFactor), 0);
+
+        const netUpcoming = myApps.filter(a => a.payoutStatus === 'Settled' && a.payoutDate && a.payoutDate.toDate() > now)
+            .reduce((sum, a) => sum + Math.floor((parseInt(a.price) || 0) * netFactor), 0);
+
+        const netSettled = myApps.filter(a => a.payoutStatus === 'Settled' && a.payoutDate && a.payoutDate.toDate() <= now)
+            .reduce((sum, a) => sum + Math.floor((parseInt(a.price) || 0) * netFactor), 0);
 
         summaryMetrics.innerHTML = `
-            <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <div class="admin-stat-card">
                 <i class="fas fa-microscope" style="color:var(--primary); font-size:1.5rem; margin-bottom:10px;"></i>
                 <h3>₹${netPending}</h3>
                 <p style="color:var(--text-muted); font-size:0.9rem;">Pending Settlement</p>
             </div>
-            <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <div class="admin-stat-card">
                 <i class="fas fa-clock" style="color:var(--primary); font-size:1.5rem; margin-bottom:10px;"></i>
                 <h3>₹${netUpcoming}</h3>
-                <p style="color:var(--text-muted); font-size:0.9rem;">Upcoming (1 Week Wait)</p>
+                <p style="color:var(--text-muted); font-size:0.9rem;">Upcoming Payout</p>
             </div>
-            <div class="admin-stat-card" style="background:#fff; border:1px solid #eee; padding:20px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <div class="admin-stat-card">
                 <i class="fas fa-piggy-bank" style="color:#2ecc71; font-size:1.5rem; margin-bottom:10px;"></i>
                 <h3 style="color:#2ecc71;">₹${netSettled}</h3>
                 <p style="color:var(--text-muted); font-size:0.9rem;">Available to Withdraw</p>
             </div>
+            <div class="admin-stat-card">
+                <i class="fas fa-calendar-check" style="color:var(--secondary); font-size:1.5rem; margin-bottom:10px;"></i>
+                <h3>${myApps.length}</h3>
+                <p style="color:var(--text-muted); font-size:0.9rem;">Total Bookings</p>
+            </div>
         `;
-    }
-
-    if (myApps.length === 0) {
-        list.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-muted);">No test requests yet.</p>`;
-    } else {
-        list.innerHTML = myApps.map(a => `
-            <div class="tile-item" style="flex-direction:column; align-items:flex-start; gap:10px;">
-                <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                    <div class="tile-info">
-                        <h4>${a.patientName}</h4>
-                        <p>Diagnostic Request • ${a.date}</p>
-                    </div>
-                    <span class="tile-badge status-${a.status}">${a.status}</span>
-                </div>
-                ${a.status === 'pending' ? `
-                    <div style="display:flex; gap:10px; width:100%;">
-                        <button class="btn-small btn-signup" style="flex:1;" onclick="uploadLabReport('${a.id}')">
-                            <i class="fas fa-file-upload"></i> Upload & Tag Report
-                        </button>
-                    </div>
-                ` : (a.reportUrl ? `<span style="font-size:0.75rem; color:#2ecc71;"><i class="fas fa-check-circle"></i> Report Uploaded (${a.reportTag})</span>` : '')}
-            </div>
-        `).join('');
-    }
-
-    // Catalog List (Directly from AppState.user or labs collection)
-    const currentLab = AppState.labs.find(l => l.id === AppState.user.id);
-    if (currentLab && currentLab.catalog) {
-        catalogList.innerHTML = currentLab.catalog.map((test, idx) => `
-            <div class="tile-item">
-                <img src="${test.image || 'https://via.placeholder.com/50'}" style="width:50px; height:50px; border-radius:8px; object-fit:cover;">
-                <div class="tile-info" style="flex:1; margin-left:15px;">
-                    <h4>${test.name}</h4>
-                    <p>₹${test.price}</p>
-                </div>
-                <button class="btn-book" style="background:#e74c3c; padding:5px 10px;" onclick="removeLabTest(${idx})"><i class="fas fa-trash"></i></button>
-            </div>
-        `).join('');
-    } else {
-        catalogList.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--text-muted);">Your catalog is empty.</p>`;
     }
 }
 
-window.showLabTab = function (tab, event) {
-    const targetId = `lab-${tab}-tab`;
-    const targetTab = document.getElementById(targetId);
-    if (!targetTab) {
-        console.warn(`Tab ${targetId} not found!`);
+window.renderLabBookings = function () {
+    const list = document.getElementById('lab-bookings-list');
+    if (!list) return;
+
+    const filter = document.getElementById('lab-booking-filter')?.value || 'All';
+    let filtered = AppState.appointments.filter(a => a.targetId === AppState.user.id);
+
+    if (filter !== 'All') {
+        filtered = filtered.filter(a => a.status === filter);
+    }
+
+    if (filtered.length === 0) {
+        list.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted); border:1px dashed #ddd; border-radius:15px;"><i class="fas fa-calendar-times" style="font-size:2rem; margin-bottom:10px;"></i><p>No bookings found for the selected status.</p></div>`;
         return;
     }
 
-    document.querySelectorAll('#lab-view .doctor-tab').forEach(el => el.classList.add('hidden'));
-    targetTab.classList.remove('hidden');
+    list.innerHTML = filtered.map(a => `
+        <div class="tile-item" style="flex-direction:column; align-items:flex-start; gap:15px; padding:20px;">
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                <div class="tile-info">
+                    <h4 style="font-size:1.1rem; margin-bottom:5px;">${a.patientName}</h4>
+                    <p style="font-size:0.85rem; color:var(--text-muted);"><i class="fas fa-vial"></i> ${a.serviceName || 'Diagnostic Test'} • ${a.date} at ${a.slot}</p>
+                    <p style="font-size:0.8rem; margin-top:5px;"><i class="fas fa-money-bill-wave" style="color:#2ecc71;"></i> Fee: ₹${a.price} • <span class="tile-badge status-${a.paymentStatus}">${a.paymentStatus}</span></p>
+                </div>
+                <div style="text-align:right;">
+                    <span class="tile-badge status-${a.status.toLowerCase().replace(' ', '-')}" style="padding:5px 15px; font-size:0.8rem;">${a.status}</span>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:10px; width:100%; border-top:1px solid #f5f5f5; padding-top:15px;">
+                <select onchange="updateLabBookingStatus('${a.id}', this.value)" style="flex:1; padding:10px; border-radius:10px; border:1px solid #ddd; font-size:0.85rem;">
+                    <option value="" disabled selected>Update Status...</option>
+                    <option value="Confirmed" ${a.status === 'Confirmed' ? 'selected' : ''}>Confirmed</option>
+                    <option value="Sample Collected" ${a.status === 'Sample Collected' ? 'selected' : ''}>Sample Collected</option>
+                    <option value="Processing" ${a.status === 'Processing' ? 'selected' : ''}>Processing</option>
+                    <option value="Report Ready" ${a.status === 'Report Ready' ? 'selected' : ''}>Report Ready</option>
+                    <option value="Completed" ${a.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                    <option value="Cancelled" ${a.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+                </select>
+                ${a.status === 'Report Ready' ? `<button class="btn-signup" style="flex:1; background:var(--secondary);" onclick="uploadLabReport('${a.id}')"><i class="fas fa-file-upload"></i> Upload Final Report</button>` : ''}
+                <button class="btn-small" onclick="window.open('tel:${a.patientPhone || '9990001122'}')" style="padding:10px;"><i class="fas fa-phone"></i></button>
+            </div>
+        </div>
+    `).join('');
+};
 
-    document.querySelectorAll('#lab-view .menu-item').forEach(btn => btn.classList.remove('active'));
-    if (event && event.currentTarget) event.currentTarget.classList.add('active');
-
-    if (tab === 'summary') renderLabDashboard();
-    if (tab === 'technician') renderLabTechnician();
-    if (tab === 'statements') renderLabStatements();
-
-    if (tab === 'profile' && AppState.user) {
-        const currentLab = AppState.labs.find(l => l.id === AppState.user.id) || AppState.user;
-        document.getElementById('lab-profile-spec').value = currentLab.specialty || '';
-        document.getElementById('lab-profile-fee').value = currentLab.price || '';
-        document.getElementById('lab-profile-address').value = currentLab.address || '';
+window.updateLabBookingStatus = async function (appId, newStatus) {
+    showToast(`Updating status to ${newStatus}...`);
+    try {
+        await db.collection('appointments').doc(appId).update({
+            status: newStatus,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast("Booking status updated!", "success");
+        if (newStatus === 'Completed') releaseEscrowToWallet(appId);
+        renderLabBookings();
+    } catch (err) {
+        showToast("Update failed", "error");
     }
+};
+
+window.renderLabCatalog = function () {
+    const list = document.getElementById('lab-catalog-list');
+    if (!list) return;
+
+    const myTests = (AppState.allLabTests || []).filter(t => t.labId === AppState.user.id);
+
+    if (myTests.length === 0) {
+        list.innerHTML = `<p style="text-align:center; padding:30px; color:var(--text-muted); border:1px dashed #ddd; border-radius:15px;">You haven't added any tests from the master catalog yet.</p>`;
+        return;
+    }
+
+    list.innerHTML = myTests.map(t => {
+        const master = AppState.testCatalog.find(mc => mc.id === t.testId) || { name: 'Unknown Test', category: 'General' };
+        return `
+            <div class="tile-item" style="padding:15px;">
+                <div style="width:50px; height:50px; background:var(--primary-light); color:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-flask"></i>
+                </div>
+                <div class="tile-info" style="flex:1; margin-left:15px;">
+                    <h4 style="margin:0;">${master.name}</h4>
+                    <p style="font-size:0.8rem; color:var(--text-muted);">${master.category} • Home Collection: ${t.homeCollection ? 'Yes' : 'No'}</p>
+                </div>
+                <div style="text-align:right; margin-right:15px;">
+                    <h4 style="margin:0; color:var(--primary);">₹${t.price}</h4>
+                </div>
+                <button class="btn-small" style="background:#fee; color:#c00;" onclick="deleteLabTestPrice('${t.id}')"><i class="fas fa-trash"></i></button>
+            </div>
+        `;
+    }).join('');
+
+    const pkgSelect = document.getElementById('lab-pkg-tests');
+    if (pkgSelect) {
+        pkgSelect.innerHTML = myTests.map(t => {
+            const master = AppState.testCatalog.find(mc => mc.id === t.testId);
+            return `<option value="${t.testId}">${master?.name || 'Test'}</option>`;
+        }).join('');
+    }
+};
+
+window.addTestToLabCatalog = async function () {
+    const testId = document.getElementById('master-test-select').value;
+    const price = document.getElementById('lab-test-price').value;
+    const homeCol = document.getElementById('lab-test-home-col').checked;
+
+    if (!testId || !price) return showToast("Please select a test and enter your price", "warning");
+
+    showToast("Adding test...");
+    try {
+        await db.collection('lab_test_prices').add({
+            labId: AppState.user.id,
+            testId: testId,
+            price: parseInt(price),
+            homeCollection: homeCol,
+            active: true,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast("Test added to your catalog!", "success");
+        document.getElementById('lab-test-price').value = '';
+        document.getElementById('master-test-select').value = '';
+    } catch (err) {
+        showToast("Failed to add test", "error");
+    }
+};
+
+window.deleteLabTestPrice = async function (id) {
+    if (!confirm("Are you sure you want to remove this test from your offerings?")) return;
+    try {
+        await db.collection('lab_test_prices').doc(id).delete();
+        showToast("Test removed");
+    } catch (err) {
+        showToast("Delete failed", "error");
+    }
+};
+
+window.renderLabPackages = async function () {
+    const list = document.getElementById('lab-packages-list');
+    if (!list) return;
+
+    try {
+        const snap = await db.collection('lab_packages').where('labId', '==', AppState.user.id).get();
+        const packages = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        if (packages.length === 0) {
+            list.innerHTML = `<p style="text-align:center; padding:30px; color:var(--text-muted);">No packages created yet.</p>`;
+            return;
+        }
+
+        list.innerHTML = packages.map(p => `
+            <div class="tile-item" style="padding:15px; border:1.5px solid var(--primary-light);">
+                <div style="width:50px; height:50px; background:var(--primary); color:white; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-boxes-stacked"></i>
+                </div>
+                <div class="tile-info" style="flex:1; margin-left:15px;">
+                    <h4 style="margin:0;">${p.name}</h4>
+                    <p style="font-size:0.8rem; color:var(--text-muted);">${p.testIds.length} Tests • Report in ${p.reportTime}</p>
+                </div>
+                <div style="text-align:right; margin-right:15px;">
+                    <h4 style="margin:0; color:#2ecc71;">₹${p.price}</h4>
+                </div>
+                <button class="btn-small" style="background:#fee; color:#c00;" onclick="deleteLabPackage('${p.id}')"><i class="fas fa-trash"></i></button>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error("Render packages failed:", err);
+    }
+};
+
+window.createLabPackage = async function () {
+    const name = document.getElementById('lab-pkg-name').value;
+    const price = document.getElementById('lab-pkg-price').value;
+    const reportTime = document.getElementById('lab-pkg-report-time').value;
+    const selectedOptions = Array.from(document.getElementById('lab-pkg-tests').selectedOptions);
+    const testIds = selectedOptions.map(o => o.value);
+
+    if (!name || !price || testIds.length === 0) return showToast("Please fill all fields and select tests", "warning");
+
+    showToast("Publishing package...");
+    try {
+        await db.collection('lab_packages').add({
+            labId: AppState.user.id,
+            name,
+            price: parseInt(price),
+            reportTime,
+            testIds,
+            active: true,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast("Package published successfully!", "success");
+        document.getElementById('lab-pkg-name').value = '';
+        document.getElementById('lab-pkg-price').value = '';
+        renderLabPackages();
+    } catch (err) {
+        showToast("Failed to create package", "error");
+    }
+};
+
+window.deleteLabPackage = async function (id) {
+    if (!confirm("Delete this package?")) return;
+    try {
+        await db.collection('lab_packages').doc(id).delete();
+        showToast("Package deleted");
+        renderLabPackages();
+    } catch (err) {
+        showToast("Delete failed", "error");
+    }
+};
+
+window.renderLabDocs = function () {
+    const grid = document.getElementById('lab-docs-grid');
+    if (!grid) return;
+
+    const docs = AppState.user.docs || {};
+    const labels = {
+        ownerIdProof: 'Owner ID Proof',
+        regCert: 'Lab Registration Cert',
+        tradeLicense: 'Trade License',
+        nablCert: 'NABL Certificate',
+        techCert: 'Technician Qual.',
+        panCard: 'PAN Card',
+        labPhoto: 'Lab Interior',
+        equipPhoto: 'Equipment Photo',
+        recepPhoto: 'Reception Photo'
+    };
+
+    grid.innerHTML = Object.entries(labels).map(([key, label]) => `
+        <div class="upload-card" onclick="document.getElementById('doc-${key}').click()">
+            <input type="file" id="doc-${key}" class="hidden" onchange="handleDocUpdate('${key}', this)">
+            <i class="fas ${docs[key] ? 'fa-check-circle' : 'fa-file-arrow-up'}" style="color:${docs[key] ? '#2ecc71' : 'var(--primary)'};"></i>
+            <h4>${label}</h4>
+            <div class="upload-preview">${docs[key] ? '✓ Uploaded' : 'Not Uploaded'}</div>
+            ${docs[key] ? `<button class="btn-small" style="margin-top:10px; background:var(--primary-light); color:var(--primary);" onclick="event.stopPropagation(); window.open('${docs[key]}', '_blank')">View Doc</button>` : ''}
+        </div>
+    `).join('');
+};
+
+window.handleDocUpdate = async function (key, input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    showToast(`Uploading ${key}...`);
+    try {
+        const url = await uploadFile(file, `docs/labs/${AppState.user.id}/${key}`);
+        const docs = AppState.user.docs || {};
+        docs[key] = url;
+
+        await db.collection('labs').doc(AppState.user.id).update({ docs });
+        AppState.user.docs = docs;
+        showToast("Document updated!", "success");
+        renderLabDocs();
+    } catch (err) {
+        showToast("Upload failed", "error");
+    }
+};
+
+window.renderLabTechnician = function () {
+    const list = document.getElementById('lab-technician-list');
+    if (!list) return;
+
+    const pickups = AppState.appointments.filter(a => a.targetId === AppState.user.id && a.homeCollection);
+
+    if (pickups.length === 0) {
+        list.innerHTML = `<p style="text-align:center; padding:30px; color:var(--text-muted);">No current home collection requests.</p>`;
+        return;
+    }
+
+    list.innerHTML = pickups.map(p => `
+        <div class="tile-item">
+            <div style="width:40px; height:40px; background:var(--secondary); color:white; border-radius:50%; display:flex; align-items:center; justify-content:center;">
+                <i class="fas fa-home"></i>
+            </div>
+            <div class="tile-info" style="flex:1; margin-left:15px;">
+                <h4 style="margin:0;">${p.patientName}</h4>
+                <p style="font-size:0.75rem; color:var(--text-muted);">${p.patientAddress || 'Address on Booking'}</p>
+                <p style="font-size:0.75rem;"><strong>Slot:</strong> ${p.date} • ${p.slot}</p>
+            </div>
+            <span class="tile-badge" style="background:#eee; color:#666;">${p.status}</span>
+        </div>
+    `).join('');
+};
+
+window.uploadLabReport = async function (appId) {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'application/pdf';
+    fileInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        showToast("Uploading report...");
+        try {
+            const url = await uploadFile(file, `reports/${appId}`);
+            await db.collection('appointments').doc(appId).update({
+                reportUrl: url,
+                reportUploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                status: 'Completed'
+            });
+            showToast("Report uploaded and tagged!", "success");
+            renderLabBookings();
+        } catch (err) {
+            showToast("Upload failed", "error");
+        }
+    };
+    fileInput.click();
 };
 
 window.renderLabStatements = async function () {
@@ -3113,12 +3626,27 @@ window.viewProviderDetails = function (id, collection) {
                 <h4><i class="fas fa-file-shield"></i> Verified Documents & Portfolio</h4>
                 <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-bottom:15px;">
                     ${Object.entries(p.docs || {}).map(([key, url]) => `
-                        <div class="doc-preview-item" style="padding:10px; border:1px solid #eee;">
+                        <div class="doc-preview-item" style="padding:10px; border:1px solid #eee; border-radius:8px;">
                             <i class="fas fa-file-alt"></i>
                             <span style="flex:1; font-size:0.75rem;">${key.replace(/([A-Z])/g, ' $1').toUpperCase()}</span>
                             <a href="${url}" target="_blank" style="color:var(--primary); font-size:0.75rem;"><i class="fas fa-external-link-alt"></i></a>
                         </div>
                     `).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">No documents uploaded.</p>'}
+                </div>
+            </div>
+
+            <div class="detail-group" style="grid-column: 1/-1;">
+                <h4><i class="fas fa-university"></i> Bank & Payout Details</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; background:#f0f7ff; padding:15px; border-radius:12px; border:1px solid var(--primary-light);">
+                    <div>
+                        <p style="margin-bottom:8px;"><strong>Account Holder:</strong> ${p.bankName || 'N/A'}</p>
+                        <p style="margin-bottom:8px;"><strong>Bank Name:</strong> ${p.bankInstitution || 'N/A'}</p>
+                        <p style="margin-bottom:0;"><strong>Account Number:</strong> ${p.bankAcc || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <p style="margin-bottom:8px;"><strong>IFSC Code:</strong> ${p.ifsc || 'N/A'}</p>
+                        <p style="margin-bottom:0;"><strong>UPI ID:</strong> <span style="color:var(--primary);">${p.upi || 'N/A'}</span></p>
+                    </div>
                 </div>
             </div>
 
