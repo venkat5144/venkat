@@ -1779,15 +1779,15 @@ function renderDoctorDashboard() {
 
         if (nameEl) {
             nameEl.innerText = AppState.user.name;
-            console.log("Sidebar name set to:", AppState.user.name);
-        } else {
-            console.error("doctor-sidebar-name element missing!");
         }
 
         if (avatarEl) {
-            const initials = AppState.user.name.split(' ').map(n => n?.[0]).filter(Boolean).join('').toUpperCase().substring(0, 2);
-            avatarEl.innerText = initials || "??";
-            console.log("Avatar initials set to:", initials);
+            if (AppState.user.image) {
+                avatarEl.innerHTML = `<img src="${AppState.user.image}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+            } else {
+                const initials = AppState.user.name.split(' ').map(n => n?.[0]).filter(Boolean).join('').toUpperCase().substring(0, 2);
+                avatarEl.innerText = initials || "??";
+            }
         }
     }
 
@@ -2446,10 +2446,14 @@ window.saveDoctorProfile = async function () {
         };
 
         await db.collection('doctors').doc(AppState.user.id).update(updates);
+        // CRITICAL: Also update global users collection so header/sidebar refreshes
+        await db.collection('users').doc(AppState.user.id).update({ image: photoURL });
+
         AppState.user = { ...AppState.user, ...updates };
 
         showToast("Clinic Profile Updated!");
         refreshActiveDashboard();
+        updateSidebarUI();
     } catch (err) {
         showToast("Save failed: " + err.message, "error");
     }
@@ -2484,10 +2488,14 @@ window.saveLabProfile = async function () {
         };
 
         await db.collection('labs').doc(AppState.user.id).update(updates);
+        // CRITICAL: Also update global users collection so header/sidebar refreshes
+        await db.collection('users').doc(AppState.user.id).update({ image: photoURL });
+
         AppState.user = { ...AppState.user, ...updates };
 
         showToast("Lab Profile Updated!");
         refreshActiveDashboard();
+        updateSidebarUI();
     } catch (err) {
         showToast("Save failed: " + err.message, "error");
     }
@@ -2502,6 +2510,15 @@ function renderLabDashboard() {
 
     if (AppState.user) {
         document.getElementById('lab-sidebar-name').innerText = AppState.user.name;
+        const avatarEl = document.querySelector('#lab-view .profile-img-large');
+        if (avatarEl) {
+            if (AppState.user.image) {
+                avatarEl.innerHTML = `<img src="${AppState.user.image}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+            } else {
+                const initials = AppState.user.name.split(' ').map(n => n?.[0]).filter(Boolean).join('').toUpperCase().substring(0, 2);
+                avatarEl.innerText = initials || "??";
+            }
+        }
     }
 
     // Summary Metrics for Lab
