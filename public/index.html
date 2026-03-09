@@ -120,23 +120,29 @@
 
             <div class="user-actions">
                 <div class="nav-links desktop-only"
-                    style="display:flex; gap:30px; margin-right:30px; font-weight:600; color:var(--text-main);">
-                    <a href="javascript:void(0)" onclick="location.reload()" style="color:var(--primary);">Home</a>
-                    <a href="javascript:void(0)" onclick="setCategory('doctors')">Doctors</a>
-                    <a href="javascript:void(0)" onclick="setCategory('labs')">Lab Tests</a>
-                    <a href="javascript:void(0)" onclick="showPatientSection('reviews')">Reviews Portal</a>
-                    <a href="javascript:void(0)" onclick="showPatientSection('history')">Appointments</a>
+                    style="display:flex; align-items:center; gap:35px; margin-right:40px; font-weight:700;">
+                    <a href="javascript:void(0)" onclick="location.reload()"
+                        style="color:var(--primary); text-decoration:none;">Home</a>
+                    <a href="javascript:void(0)" onclick="setCategory('doctors')"
+                        style="color:var(--text-main); text-decoration:none;">Doctors</a>
+                    <a href="javascript:void(0)" onclick="setCategory('labs')"
+                        style="color:var(--text-main); text-decoration:none;">Lab Tests</a>
+                    <a href="javascript:void(0)" onclick="showPatientSection('reviews')"
+                        style="color:var(--text-main); text-decoration:none;">Reviews Portal</a>
+                    <a href="javascript:void(0)" onclick="showPatientSection('history')"
+                        style="color:var(--text-main); text-decoration:none;">Appointments</a>
                 </div>
-                <button class="theme-switch" id="theme-toggle" title="Toggle Dark Mode">
+                <button class="theme-switch" id="theme-toggle" title="Toggle Dark Mode" style="margin-right:15px;">
                     <i class="fas fa-moon"></i>
                 </button>
-                <div class="user-profile hidden" id="user-info">
-                    <span id="current-user-name" onclick="showPatientSection('profile', event)"
-                        style="cursor:pointer; font-weight:700;">User</span>
-                    <span class="role-badge" id="current-user-role"
-                        style="background:var(--primary-light); color:var(--primary);">Patient</span>
+                <div class="user-profile hidden" id="user-info" style="gap:20px;">
+                    <div style="text-align:right;">
+                        <span id="current-user-name" onclick="showPatientSection('profile', event)"
+                            style="cursor:pointer; font-weight:800; display:block; line-height:1.2;">User</span>
+                        <span class="role-badge" id="current-user-role">Patient</span>
+                    </div>
                 </div>
-                <button class="btn-signup" id="auth-main-btn">Login / Sign Up</button>
+                <button class="btn-signup" id="auth-main-btn" style="margin-left:10px;">Login / Sign Up</button>
             </div>
         </nav>
     </header>
