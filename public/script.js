@@ -251,7 +251,6 @@ window.toggleSidebar = function () {
 };
 
 window.handleSidebarAction = function (action) {
-    toggleSidebar();
     switch (action) {
         case 'about':
             showToast("HealthMate v2.2\nBuild once, run everywhere!\nYou can install this as an app from your browser menu.", "info");
@@ -264,6 +263,9 @@ window.handleSidebarAction = function (action) {
             break;
         case 'help':
             showToast("Connecting to Help Desk... 24/7 Support available.");
+            break;
+        case 'offers':
+            showToast("Checking for personalized health offers for you...", "success");
             break;
     }
 };
@@ -1514,7 +1516,10 @@ window.showPatientSection = function (tab, event) {
         item.classList.remove('active');
         const span = item.querySelector('span').innerText.toLowerCase();
         // Match span text with tab name
-        if (span.includes(tab) || (tab === 'history' && span.includes('bookings')) || (tab === 'records' && span.includes('records'))) {
+        if (span.includes(tab) ||
+            (tab === 'history' && span.includes('bookings')) ||
+            (tab === 'records' && span.includes('records')) ||
+            (tab === 'profile' && span.includes('account'))) {
             item.classList.add('active');
         }
     });

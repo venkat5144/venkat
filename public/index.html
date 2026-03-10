@@ -63,55 +63,12 @@
 
 <body>
     <!-- Premium Sidebar / Drawer Section -->
-    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
-    <aside class="app-sidebar" id="app-sidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-photo">
-                <img id="sidebar-user-photo"
-                    src="https://images.unsplash.com/photo-1633332755192-727a05c4013d?auto=format&fit=crop&w=200&q=80"
-                    alt="Profile">
-            </div>
-            <div class="sidebar-user-info">
-                <h2 id="sidebar-user-name">GUEST USER</h2>
-                <p id="sidebar-user-id">ID: HEALTH-0000</p>
-            </div>
-        </div>
 
-        <nav class="sidebar-menu">
-            <a href="javascript:void(0)" class="menu-item" onclick="handleSidebarAction('about')">
-                <i class="fas fa-info-circle"></i> <span>About HealthMate</span>
-            </a>
-            <a href="javascript:void(0)" class="menu-item" onclick="handleSidebarAction('devices')">
-                <i class="fas fa-laptop-medical"></i> <span>Active Devices</span>
-            </a>
-            <a href="javascript:void(0)" class="menu-item" onclick="handleSidebarAction('password')">
-                <i class="fas fa-key"></i> <span>Reset Password</span>
-            </a>
-            <a href="javascript:void(0)" class="menu-item" id="pwa-install-btn" onclick="showInstallPrompt()"
-                style="display:none; color:var(--primary); font-weight:700;">
-                <i class="fas fa-download"></i> <span>Download Mobile App</span>
-            </a>
-            <a href="javascript:void(0)" class="menu-item" onclick="handleSidebarAction('help')">
-                <i class="fas fa-headset"></i> <span>Help Desk</span>
-            </a>
-
-            <a href="javascript:void(0)" class="menu-item" onclick="showPatientSection('reviews')">
-                <i class="fas fa-star" style="color:#f1c40f;"></i> <span>Reviews Portal</span>
-            </a>
-            <div class="sidebar-divider"></div>
-
-            <a href="javascript:void(0)" class="menu-item logout-item" onclick="handleLogout()">
-                <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
-            </a>
-        </nav>
-    </aside>
 
     <header class="header">
         <nav class="container">
             <div style="display: flex; align-items: center; gap: 15px;">
-                <button class="sidebar-btn" id="sidebar-toggle-btn" onclick="toggleSidebar()">
-                    <i class="fas fa-bars"></i>
-                </button>
+
                 <div class="logo" onclick="window.location.reload()">
                     <img src="assets/healthmate-logo.png" alt="HealthMate Logo" class="logo-img">
                     <span class="logo-text" style="font-weight: 800; font-size: 1.6rem;">Health<span>Mate</span></span>
@@ -149,25 +106,28 @@
 
     <!-- Mobile Bottom Navigation -->
     <nav class="mobile-bottom-nav" id="mobile-nav">
-        <div class="nav-item active" onclick="showPatientSection('home')">
-            <i class="fas fa-home"></i>
-            <span>Home</span>
-            <div class="active-dot"></div>
-        </div>
-        <div class="nav-item" onclick="showPatientSection('history')">
-            <i class="fas fa-calendar-check"></i>
-            <span>Bookings</span>
-            <div class="active-dot"></div>
-        </div>
-        <div class="nav-item" onclick="showPatientSection('records')">
-            <i class="fas fa-folder-open"></i>
-            <span>Records</span>
-            <div class="active-dot"></div>
-        </div>
-        <div class="nav-item" onclick="showPatientSection('profile')">
-            <i class="fas fa-user-circle" id="mobile-nav-user-photo"></i>
-            <span>Profile</span>
-            <div class="active-dot"></div>
+        <div class="nav-container">
+            <div class="nav-item active" onclick="showPatientSection('home')">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </div>
+            <div class="nav-item" onclick="showPatientSection('history')">
+                <i class="fas fa-calendar-check-o"></i>
+                <i class="fas fa-calendar-check"></i>
+                <span>My Bookings</span>
+            </div>
+            <div class="nav-item" onclick="handleSidebarAction('offers')">
+                <i class="fas fa-percent"></i>
+                <span>Offers</span>
+            </div>
+            <div class="nav-item" onclick="handleSidebarAction('help')">
+                <i class="fas fa-comment-dots"></i>
+                <span>Help</span>
+            </div>
+            <div class="nav-item" onclick="showPatientSection('profile')">
+                <i class="fas fa-user-circle" id="mobile-nav-user-photo"></i>
+                <span>My Account</span>
+            </div>
         </div>
     </nav>
 
@@ -176,28 +136,7 @@
         <section id="patient-view" class="role-section">
             <!-- Tab: Home (Hero + Categories + Listings) -->
             <div id="patient-home-tab" class="patient-tab">
-                <!-- Diagnostic Test Search Section -->
-                <section class="test-search-section container" style="margin: 40px 0;">
-                    <div
-                        style="background: var(--white); padding: 30px; border-radius: var(--radius-xl); box-shadow: var(--shadow-md); border: 2px solid var(--primary-light);">
-                        <h2 style="margin-bottom: 20px; font-size: 1.5rem; color: #2C3E50;">Find a Diagnostic Test</h2>
-                        <div class="search-container"
-                            style="max-width: 100%; box-shadow: none; border: 1.5px solid #eee;">
-                            <div class="search-box main-search">
-                                <i class="fas fa-search-plus"></i>
-                                <input type="text" id="patient-test-search"
-                                    placeholder="Search for tests (e.g. Blood Test, Thyroid, MRI, Diabetes Pack)"
-                                    onkeyup="handleTestSearch(event)">
-                            </div>
-                            <button class="btn-signup" onclick="executeTestSearch()"
-                                style="border-radius: 0 var(--radius-lg) var(--radius-lg) 0; padding: 0 40px;">Find
-                                Center</button>
-                        </div>
-                        <div id="test-search-results-mini" class="hidden"
-                            style="margin-top:20px; display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:15px;">
-                        </div>
-                    </div>
-                </section>
+
                 <!-- Redesigned Hero Section -->
                 <section class="hero-section container" style="padding: 80px 0 60px; text-align: center;">
                     <h1
@@ -731,6 +670,8 @@
                                     class="fas fa-wallet"></i> Payment History</button>
                             <button class="menu-item" onclick="showProfileSub('security', event)"><i
                                     class="fas fa-shield-halved"></i> Security</button>
+                            <button class="menu-item logout-item" onclick="handleLogout()" style="color:#e74c3c;"><i
+                                    class="fas fa-sign-out-alt"></i> Logout</button>
                         </div>
                     </div>
                     <div class="profile-main-content">
